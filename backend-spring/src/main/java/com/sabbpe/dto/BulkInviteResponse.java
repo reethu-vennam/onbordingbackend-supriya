@@ -1,0 +1,20 @@
+package com.sabbpe.dto;
+
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Data;
+import lombok.NoArgsConstructor;
+
+import java.util.List;
+import java.util.Map;
+
+@Data
+@Builder
+@NoArgsConstructor
+@AllArgsConstructor
+public class BulkInviteResponse {
+    private int sent;
+    private int failed;
+    private int total;
+    private List<Map<String, Object>> results;
+}

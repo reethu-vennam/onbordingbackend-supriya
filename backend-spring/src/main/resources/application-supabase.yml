@@ -1,0 +1,89 @@
+server:
+  port: 8080
+
+spring:
+  application:
+    name: sabbpe-backend
+  datasource:
+    url: jdbc:postgresql://db.grbbtgfvgwxtkgxtakug.supabase.co:5432/postgres?sslmode=require
+    driver-class-name: org.postgresql.Driver
+    username: postgres
+    password: MhTJieOyd2nPDJba
+    hikari:
+      maximum-pool-size: 20
+      minimum-idle: 5
+      idle-timeout: 300000
+      connection-timeout: 20000
+  jpa:
+    hibernate:
+      ddl-auto: none
+    show-sql: false
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+        format_sql: true
+        jdbc:
+          batch_size: 20
+  flyway:
+    enabled: false
+  jackson:
+    serialization:
+      write-dates-as-timestamps: false
+    date-format: yyyy-MM-dd'T'HH:mm:ss
+    time-zone: UTC
+  servlet:
+    multipart:
+      max-file-size: 50MB
+      max-request-size: 50MB
+
+app:
+  jwt:
+    secret: ${JWT_SECRET:TXlTdXBlclNlY3JldEtleUZvclNhYmJQZUpXVDIwMjZUaGlzSXNWZXJ5TG9uZ0FuZFNlY3VyZQ==}
+    expiration-ms: 86400000
+    refresh-expiration-ms: 2592000000
+  cors:
+    allowed-origins: ${CORS_ORIGINS:http://localhost:3000,http://localhost:5173,http://localhost:8877}
+
+  transbank:
+    base-url: ${TRANSBANK_BASE_URL:https://transbank.sabbpe.com/api}
+    client-id: ${TRANSBANK_CLIENT_ID:5e06f31d-d298-11f0-96ff-4201c0a81e02}
+    entity-id: ${TRANSBANK_ENTITY_ID:8116f9f2-f5d1-4e9c-9c2c-988015c140b4}
+    program-id: ${TRANSBANK_PROGRAM_ID:513}
+    processor: ${TRANSBANK_PROCESSOR:TRANSBANK}
+    transaction-type: ${TRANSBANK_TRANSACTION_TYPE:IMPS}
+
+  notification:
+    from-email: ${NOTIFICATION_FROM_EMAIL:payments@sabbpe.com}
+    onboarding-team-email: ${NOTIFICATION_ONBOARDING_TEAM_EMAIL:vendor.onboarding@sabbpe.com}
+
+  email:
+    host: ${EMAIL_HOST:smtppro.zoho.in}
+    port: ${EMAIL_PORT:465}
+    username: ${EMAIL_USERNAME:${EMAIL_USER:payments@sabbpe.com}}
+    password: ${EMAIL_PASSWORD:${EMAIL_PASS:Tjk5hLgsSKt4}}
+
+  settlement:
+    dry-run: ${SETTLEMENT_DRY_RUN:false}
+    mdr-percentage: ${SETTLEMENT_MDR_PERCENTAGE:1.80}
+    reserve-release-business-days: ${SETTLEMENT_RESERVE_RELEASE_DAYS:15}
+
+  webhook:
+    secret: ${WEBHOOK_SECRET:}
+    api-key: ${WEBHOOK_API_KEY:}
+
+  upload:
+    dir: ${UPLOAD_DIR:./uploads}
+
+  msg91:
+    auth-key: ${MSG91_AUTHKEY:441109AdIRodg4B6932ec90P1}
+    whatsapp-url: ${MSG91_WHATSAPP_URL:https://api.msg91.com/api/v5/whatsapp/whatsapp-outbound-message/bulk/}
+    integrated-number: ${MSG91_INTEGRATED_NUMBER:917304513157}
+    template-name: ${MSG91_TEMPLATE_NAME:ekyc_verification}
+    namespace: ${MSG91_NAMESPACE:}
+
+logging:
+  level:
+    root: INFO
+    com.sabbpe: DEBUG
+    org.springframework.security: INFO
+    org.hibernate.SQL: WARN
