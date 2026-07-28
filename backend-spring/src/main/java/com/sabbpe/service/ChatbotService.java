@@ -35,6 +35,7 @@ public class ChatbotService {
         Map<String, Object> collectedData;
         StateType state;
         boolean needsHint;
+        String confirmNote;
 
         ConversationState(String sessionId, String currentStep, String language) {
             this.sessionId = sessionId;
@@ -216,6 +217,11 @@ public class ChatbotService {
         log.debug("Chatbot response for session {} step {}: reply='{}', stepComplete={}",
                 sessionId, currentStep, response.getReply(), response.isStepComplete());
 
+        if (state.state == StateType.GREET) {
+            // Greeting has now been shown; next user message is treated as the yes/no confirmation.
+            state.state = StateType.AWAITING_CONFIRM;
+        }
+
         if (state.state == StateType.COMPLETED) {
             sessions.remove(sessionId);
         }
@@ -225,34 +231,18 @@ public class ChatbotService {
 
     private void processUserMessage(ConversationState state, String message) {
         switch (state.state) {
-            case GREET -> {
-                StepQuestion firstQ = state.questions.get(0);
-                if (firstQ != null) {
-                    String extracted = extractFieldValue(firstQ.fieldKey, message);
-                    if (extracted != null && !extracted.isBlank()) {
-                        state.collectedData.put(firstQ.fieldKey, extracted);
-                    } else if (isPureYesNo(message) && needsRealText(firstQ.fieldKey)) {
-                        state.needsHint = true;
-                        break;
-                    } else if (!isPureYesNo(message)) {
-                        state.collectedData.put(firstQ.fieldKey, message.trim());
-                    } else {
-                        break;
-                    }
-                }
-                state.questionIndex = 0;
-                if (state.hasMoreQuestions()) {
+            case GREET, AWAITING_CONFIRM -> {
+                boolean isYes = CONFIRM_YES_PATTERN.matcher(message).find();
+                boolean isNo = CONFIRM_NO_PATTERN.matcher(message).find();
+                if (isYes && !isNo) {
                     state.nextQuestion(state.collectedData);
                     state.state = state.currentQuestion() != null ? StateType.ASKING : StateType.COMPLETED;
+                } else if (isNo) {
+                    state.state = StateType.AWAITING_CONFIRM;
+                    state.confirmNote = "No problem! Just say **yes** whenever you're ready to begin.";
                 } else {
-                    state.state = StateType.COMPLETED;
-                }
-            }
-            case AWAITING_CONFIRM -> {
-                boolean isConfirm = CONFIRM_YES_PATTERN.matcher(message).find();
-                if (isConfirm) {
-                    state.nextQuestion(state.collectedData);
-                    state.state = state.currentQuestion() != null ? StateType.ASKING : StateType.COMPLETED;
+                    state.state = StateType.AWAITING_CONFIRM;
+                    state.confirmNote = "Sorry, I didn't catch that. Please reply **yes** to begin, or **no** if you're not ready yet.";
                 }
             }
             case ASKING -> {
@@ -437,7 +427,7 @@ public class ChatbotService {
         String reply = switch (state.state) {
             case GREET -> buildGreeting(state);
             case ASKING -> buildQuestionReply(state, currentQ);
-            case AWAITING_CONFIRM -> buildAwaitingReply(state, currentQ);
+            case AWAITING_CONFIRM -> buildAwaitingReply(state);
             case COMPLETED -> buildCompletedReply(state);
             default -> "Hello! How can I help you with your onboarding?";
         };
@@ -459,16 +449,9 @@ public class ChatbotService {
             return "This step's already done! You can move on to the next one.";
         }
 
-        StepQuestion firstQ = state.questions.get(0);
         String stepName = getStepDisplayName(state.currentStep);
-
-        if (state.needsHint) {
-            state.needsHint = false;
-            return "Hey! I need the actual value here, not yes or no.\n\n" + firstQ.prompt;
-        }
-
-        return String.format("Hey! Let's take care of the **%s** section.\n\n%s",
-                stepName, firstQ.prompt);
+        return String.format("Hello! Let's take care of the **%s** section together. Shall we begin? (yes/no)",
+                stepName);
     }
 
     private String buildQuestionReply(ConversationState state, StepQuestion q) {
@@ -482,11 +465,13 @@ public class ChatbotService {
         return q.prompt;
     }
 
-    private String buildAwaitingReply(ConversationState state, StepQuestion q) {
-        if (q != null) {
-            return q.prompt;
+    private String buildAwaitingReply(ConversationState state) {
+        if (state.confirmNote != null) {
+            String note = state.confirmNote;
+            state.confirmNote = null;
+            return note;
         }
-        return "Ready for the next one?";
+        return "Shall we begin? (yes/no)";
     }
 
     private String buildCompletedReply(ConversationState state) {

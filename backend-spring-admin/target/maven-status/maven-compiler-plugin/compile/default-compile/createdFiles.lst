@@ -1,4 +1,5 @@
 com\sabbpe\admin\controller\HealthController.class
+com\sabbpe\admin\controller\BankAuthController.class
 com\sabbpe\admin\repository\UserRepository.class
 com\sabbpe\admin\controller\TicketController.class
 com\sabbpe\admin\model\MerchantBankDetailEntity.class
@@ -30,6 +31,7 @@ com\sabbpe\admin\repository\MerchantBankDetailRepository.class
 com\sabbpe\admin\repository\MerchantCreditCheckRepository.class
 com\sabbpe\admin\controller\AuthController.class
 com\sabbpe\admin\model\UserEntity.class
+com\sabbpe\admin\controller\BankApplicationsController.class
 com\sabbpe\admin\model\TicketMessageEntity$TicketMessageEntityBuilder.class
 com\sabbpe\admin\model\SupportKycActionEntity$SupportKycActionEntityBuilder.class
 com\sabbpe\admin\model\DocumentValidationEntity.class
@@ -47,6 +49,7 @@ com\sabbpe\admin\exception\ForbiddenException.class
 com\sabbpe\admin\config\MailConfig.class
 com\sabbpe\admin\model\MerchantKycEntity.class
 com\sabbpe\admin\exception\BadRequestException.class
+com\sabbpe\admin\service\DocumentReviewService.class
 com\sabbpe\admin\model\MerchantBankDetailEntity$MerchantBankDetailEntityBuilder.class
 com\sabbpe\admin\SabbPeAdminApplication.class
 com\sabbpe\admin\config\SecurityConfig.class

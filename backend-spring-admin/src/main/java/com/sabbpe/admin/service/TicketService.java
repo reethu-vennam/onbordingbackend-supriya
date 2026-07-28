@@ -178,8 +178,13 @@ public class TicketService {
     }
 
     public Map<String, Object> getMerchantReviewData(String merchantId, String userRole, String userId) {
+        // Try by user_id first, fall back to profile id (matches Node.js behavior)
         MerchantProfileEntity profile = merchantProfileRepository.findByUserId(merchantId)
-                .orElseThrow(() -> new ResourceNotFoundException("Merchant", "userId", merchantId));
+                .orElse(null);
+        if (profile == null) {
+            profile = merchantProfileRepository.findById(merchantId)
+                    .orElseThrow(() -> new ResourceNotFoundException("Merchant", "user_id or id", merchantId));
+        }
         List<MerchantDocumentEntity> documents = documentRepository.findByMerchantId(profile.getId());
         List<Map<String, Object>> docList = documents.stream().map(d -> {
             Map<String, Object> dm = new HashMap<>();
@@ -263,8 +268,7 @@ public class TicketService {
     public Map<String, Object> reviewMerchant(String merchantId, String status, String reviewNotes, String performedBy) {
         if (!"approved".equals(status) && !"rejected".equals(status))
             throw new BadRequestException("Invalid request data");
-        MerchantProfileEntity profile = merchantProfileRepository.findByUserId(merchantId)
-                .orElseThrow(() -> new ResourceNotFoundException("Merchant", "userId", merchantId));
+        MerchantProfileEntity profile = findMerchantById(merchantId);
         if ("rejected".equals(status)) {
             profile.setOnboardingStatus("rejected");
             profile.setRejectionReason(reviewNotes);
@@ -342,8 +346,7 @@ public class TicketService {
 
     @Transactional
     public Map<String, Object> verifyCpv(String merchantId, String performedBy) {
-        MerchantProfileEntity profile = merchantProfileRepository.findByUserId(merchantId)
-                .orElseThrow(() -> new ResourceNotFoundException("Merchant", "userId", merchantId));
+        MerchantProfileEntity profile = findMerchantById(merchantId);
         if (!"cpv_pending".equals(profile.getOnboardingStatus()))
             throw new BadRequestException("Cannot verify CPV from status: " + profile.getOnboardingStatus());
         profile.setCpvStatus("cpv_verified");
@@ -385,8 +388,7 @@ public class TicketService {
 
     @Transactional
     public Map<String, Object> rejectCpv(String merchantId, String reason) {
-        MerchantProfileEntity profile = merchantProfileRepository.findByUserId(merchantId)
-                .orElseThrow(() -> new ResourceNotFoundException("Merchant", "userId", merchantId));
+        MerchantProfileEntity profile = findMerchantById(merchantId);
         if (!"cpv_pending".equals(profile.getOnboardingStatus()))
             throw new BadRequestException("Cannot reject CPV from status: " + profile.getOnboardingStatus());
         profile.setCpvStatus("cpv_rejected");
@@ -413,6 +415,7 @@ public class TicketService {
             map.put("gst_number", m.getGstNumber());
             map.put("entity_type", m.getEntityType());
             map.put("mobile_number", m.getMobileNumber());
+            map.put("onboarding_score", m.getOnboardingScore() != null ? m.getOnboardingScore() : 0);
             map.put("score", m.getOnboardingScore() != null ? m.getOnboardingScore() : 0);
             map.put("created_at", m.getCreatedAt());
             return map;
@@ -437,7 +440,52 @@ public class TicketService {
             map.put("business_name", m.getBusinessName());
             map.put("gst_number", m.getGstNumber());
             map.put("mobile_number", m.getMobileNumber());
-            map.put("score", m.getOnboardingScore() != null ? m.getOnboardingScore() : 0);
+
+            int score = 0;
+            String[] profileFields = {"fullName", "email", "mobileNumber", "panNumber", "aadhaarNumber", "businessName", "gstNumber", "entityType"};
+            long filledCount = java.util.Arrays.stream(profileFields)
+                    .filter(f -> {
+                        try {
+                            var field = m.getClass().getMethod("get" + Character.toUpperCase(f.charAt(0)) + f.substring(1));
+                            Object val = field.invoke(m);
+                            return val != null && !val.toString().trim().isEmpty();
+                        } catch (Exception e) { return false; }
+                    }).count();
+            score += Math.round((filledCount * 30f) / profileFields.length);
+
+            try {
+                List<MerchantDocumentEntity> docs = documentRepository.findByMerchantId(m.getId());
+                if (docs != null && !docs.isEmpty()) {
+                    long verified = docs.stream().filter(d -> "verified".equals(d.getStatus())).count();
+                    score += Math.round((verified * 25f) / docs.size());
+                }
+            } catch (Exception e) { /* skip */ }
+
+            try {
+                List<MerchantPersonEntity> persons = personRepository.findByMerchantIdOrderBySequenceOrderAsc(m.getId());
+                if (persons != null && !persons.isEmpty()) {
+                    long withPan = persons.stream().filter(p -> p.getPanNumber() != null && !p.getPanNumber().trim().isEmpty()).count();
+                    score += Math.round((withPan * 20f) / persons.size());
+                }
+            } catch (Exception e) { /* skip */ }
+
+            try {
+                MerchantBankDetailEntity bank = bankDetailRepository.findByMerchantId(m.getId()).orElse(null);
+                if (bank != null) {
+                    if (bank.getAccountNumber() != null) score += 8;
+                    if (bank.getIfscCode() != null) score += 7;
+                }
+            } catch (Exception e) { /* skip */ }
+
+            try {
+                MerchantKycEntity kyc = kycRepository.findByMerchantId(m.getId()).orElse(null);
+                if (kyc != null) {
+                    if (Boolean.TRUE.equals(kyc.getVideoKycCompleted())) score += 5;
+                    if (kyc.getSelfieFilePath() != null) score += 5;
+                }
+            } catch (Exception e) { /* skip */ }
+
+            map.put("score", Math.min(score, 100));
             return map;
         }).collect(Collectors.toList());
     }
@@ -582,5 +630,14 @@ public class TicketService {
         map.put("message", m.getMessage());
         map.put("created_at", m.getCreatedAt());
         return map;
+    }
+
+    private MerchantProfileEntity findMerchantById(String merchantId) {
+        MerchantProfileEntity profile = merchantProfileRepository.findByUserId(merchantId).orElse(null);
+        if (profile == null) {
+            profile = merchantProfileRepository.findById(merchantId)
+                    .orElseThrow(() -> new ResourceNotFoundException("Merchant", "user_id or id", merchantId));
+        }
+        return profile;
     }
 }

@@ -2,7 +2,6 @@ package com.sabbpe.admin.model;
 
 import jakarta.persistence.*;
 import lombok.*;
-import org.hibernate.annotations.CreationTimestamp;
 
 import java.time.LocalDateTime;
 
@@ -38,7 +37,11 @@ public class DocumentValidationEntity {
 
     private Integer score = 0;
 
-    @CreationTimestamp
-    @Column(name = "validated_at", updatable = false)
+    @Column(name = "validated_at")
     private LocalDateTime validatedAt;
+
+    @PrePersist
+    public void prePersist() {
+        if (validatedAt == null) validatedAt = LocalDateTime.now();
+    }
 }

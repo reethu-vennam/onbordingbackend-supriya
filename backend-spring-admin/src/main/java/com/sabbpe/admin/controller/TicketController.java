@@ -1,7 +1,9 @@
 package com.sabbpe.admin.controller;
 
+import com.sabbpe.admin.exception.ResourceNotFoundException;
 import com.sabbpe.admin.service.TicketService;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
@@ -9,6 +11,7 @@ import org.springframework.web.bind.annotation.*;
 import java.util.List;
 import java.util.Map;
 
+@Slf4j
 @RestController
 @RequestMapping("/api/tickets")
 @RequiredArgsConstructor
@@ -97,7 +100,10 @@ public class TicketController {
             String role = getRole(auth);
             Map<String, Object> result = ticketService.getMerchantReviewData(merchantId, role, userId);
             return ResponseEntity.ok(result);
+        } catch (ResourceNotFoundException e) {
+            return ResponseEntity.status(404).body(Map.of("message", e.getMessage()));
         } catch (Exception e) {
+            log.error("getMerchantReviewData failed for merchantId={}: {}", merchantId, e.getMessage(), e);
             return ResponseEntity.badRequest().body(Map.of("message", e.getMessage()));
         }
     }
