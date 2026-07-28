@@ -69,7 +69,8 @@ public class SecurityConfig {
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration configuration = new CorsConfiguration();
         configuration.setAllowedOrigins(Arrays.asList(
-            "http://localhost:3000", "http://localhost:5173", "http://localhost:8877",
+            "http://localhost:3000", "http://localhost:5173", "http://localhost:8877", "http://localhost:8878",
+            "http://localhost:3002", "http://localhost:3003", "http://localhost:6003",
             "https://onboarding.sabbpe.com", "https://bank.sabbpe.com", "https://support.sabbpe.com"
         ));
         configuration.setAllowedMethods(Arrays.asList("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));

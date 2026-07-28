@@ -7,6 +7,7 @@ import com.sabbpe.admin.model.*;
 import com.sabbpe.admin.repository.*;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
@@ -169,10 +170,11 @@ public class TicketService {
         return toMessageMap(ticketMessageRepository.save(msg));
     }
 
-    private static final String MAIN_BACKEND_URL = "http://localhost:8080";
+    @Value("${app.main-backend-url:http://localhost:8080}")
+    private String mainBackendUrl;
 
-    private static String buildPublicUrl(String filePath) {
-        return MAIN_BACKEND_URL + (filePath.startsWith("/uploads/") ? filePath : "/uploads/" + filePath);
+    private String buildPublicUrl(String filePath) {
+        return mainBackendUrl + (filePath.startsWith("/uploads/") ? filePath : "/uploads/" + filePath);
     }
 
     public Map<String, Object> getMerchantReviewData(String merchantId, String userRole, String userId) {
@@ -189,6 +191,7 @@ public class TicketService {
             dm.put("status", d.getStatus());
             dm.put("rejection_reason", d.getRejectionReason());
             dm.put("uploaded_at", d.getUploadedAt());
+            dm.put("verified_at", d.getVerifiedAt());
             if (d.getFilePath() != null && !d.getFilePath().isBlank()) {
                 dm.put("public_url", buildPublicUrl(d.getFilePath()));
             }
@@ -197,45 +200,58 @@ public class TicketService {
 
         Map<String, Object> profileMap = toMap(profile);
 
-        // Bank details
-        bankDetailRepository.findByMerchantId(profile.getId()).ifPresent(bank -> {
-            Map<String, Object> bm = new HashMap<>();
-            bm.put("id", bank.getId());
-            bm.put("account_number", bank.getAccountNumber());
-            bm.put("ifsc_code", bank.getIfscCode());
-            bm.put("bank_name", bank.getBankName());
-            bm.put("account_holder_name", bank.getAccountHolderName());
-            profileMap.put("bank_details", bm);
-        });
+        try {
+            bankDetailRepository.findByMerchantId(profile.getId()).ifPresent(bank -> {
+                Map<String, Object> bm = new HashMap<>();
+                bm.put("id", bank.getId());
+                bm.put("account_number", bank.getAccountNumber());
+                bm.put("ifsc_code", bank.getIfscCode());
+                bm.put("bank_name", bank.getBankName());
+                bm.put("account_holder_name", bank.getAccountHolderName());
+                profileMap.put("bank_details", bm);
+            });
+        } catch (Exception e) {
+            log.debug("Bank details not available for merchant {}", profile.getId());
+        }
 
-        // KYC
-        kycRepository.findByMerchantId(profile.getId()).ifPresent(kyc -> {
-            Map<String, Object> km = new HashMap<>();
-            km.put("id", kyc.getId());
-            km.put("video_kyc_completed", kyc.getVideoKycCompleted());
-            km.put("location_captured", kyc.getLocationCaptured());
-            km.put("kyc_status", kyc.getKycStatus());
-            km.put("full_address", kyc.getFullAddress());
-            km.put("city", kyc.getCity());
-            km.put("state", kyc.getState());
-            km.put("pincode", kyc.getPincode());
-            km.put("video_kyc_file_path", kyc.getVideoKycFilePath());
-            km.put("selfie_file_path", kyc.getSelfieFilePath());
-            profileMap.put("kyc", List.of(km));
-        });
+        try {
+            kycRepository.findByMerchantId(profile.getId()).ifPresent(kyc -> {
+                Map<String, Object> km = new HashMap<>();
+                km.put("id", kyc.getId());
+                km.put("video_kyc_completed", kyc.getVideoKycCompleted());
+                km.put("location_captured", kyc.getLocationCaptured());
+                km.put("latitude", kyc.getLatitude());
+                km.put("longitude", kyc.getLongitude());
+                km.put("kyc_status", kyc.getKycStatus());
+                km.put("rejection_reason", kyc.getRejectionReason());
+                km.put("full_address", kyc.getFullAddress());
+                km.put("city", kyc.getCity());
+                km.put("state", kyc.getState());
+                km.put("pincode", kyc.getPincode());
+                km.put("video_kyc_file_path", kyc.getVideoKycFilePath());
+                km.put("selfie_file_path", kyc.getSelfieFilePath());
+                profileMap.put("kyc", List.of(km));
+            });
+        } catch (Exception e) {
+            log.debug("KYC not available for merchant {}", profile.getId());
+        }
 
-        // Persons
-        List<Map<String, Object>> personList = personRepository.findByMerchantIdOrderBySequenceOrderAsc(profile.getId())
-                .stream().map(p -> {
-                    Map<String, Object> pm = new HashMap<>();
-                    pm.put("id", p.getId());
-                    pm.put("role", p.getRole());
-                    pm.put("full_name", p.getFullName());
-                    pm.put("pan_number", p.getPanNumber());
-                    pm.put("is_authorized_signatory", p.getIsAuthorizedSignatory());
-                    return pm;
-                }).collect(Collectors.toList());
-        profileMap.put("persons", personList);
+        try {
+            List<Map<String, Object>> personList = personRepository.findByMerchantIdOrderBySequenceOrderAsc(profile.getId())
+                    .stream().map(p -> {
+                        Map<String, Object> pm = new HashMap<>();
+                        pm.put("id", p.getId());
+                        pm.put("role", p.getRole());
+                        pm.put("full_name", p.getFullName());
+                        pm.put("pan_number", p.getPanNumber());
+                        pm.put("is_authorized_signatory", p.getIsAuthorizedSignatory());
+                        pm.put("sequence_order", p.getSequenceOrder());
+                        return pm;
+                    }).collect(Collectors.toList());
+            profileMap.put("persons", personList);
+        } catch (Exception e) {
+            log.debug("Persons not available for merchant {}", profile.getId());
+        }
 
         Map<String, Object> result = new HashMap<>();
         result.put("profile", profileMap);
@@ -518,16 +534,20 @@ public class TicketService {
         map.put("onboarding_status", m.getOnboardingStatus());
         map.put("onboarding_score", m.getOnboardingScore());
         map.put("rejection_reason", m.getRejectionReason());
+        map.put("application_id", m.getApplicationId());
         map.put("cpv_status", m.getCpvStatus());
         map.put("cpv_video_path", m.getCpvVideoPath());
         map.put("cpv_submitted", m.getCpvSubmitted());
+        map.put("cpv_submitted_at", m.getCpvSubmittedAt());
+        map.put("cpv_verified_at", m.getCpvVerifiedAt());
+        map.put("cpv_verified_by", m.getCpvVerifiedBy());
+        map.put("cpv_rejection_reason", m.getCpvRejectionReason());
         map.put("risk_level", m.getRiskLevel());
         map.put("selected_products", m.getSelectedProducts());
         map.put("total_monthly_cost", m.getTotalMonthlyCost());
         map.put("total_onetime_cost", m.getTotalOnetimeCost());
         map.put("total_integration_cost", m.getTotalIntegrationCost());
         map.put("submitted_at", m.getSubmittedAt());
-        map.put("cpv_submitted_at", m.getCpvSubmittedAt());
         map.put("cancelled_cheque_url", m.getCancelledChequeUrl());
         map.put("pan_card_url", m.getPanCardUrl());
         map.put("aadhaar_card_url", m.getAadhaarCardUrl());

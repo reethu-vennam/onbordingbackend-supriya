@@ -63,6 +63,7 @@ public class SecurityConfig {
         config.setAllowedOrigins(Arrays.asList(
             "http://localhost:3000", "http://localhost:5173", "http://localhost:3002",
             "http://localhost:8877", "http://localhost:5174", "http://localhost:3003",
+            "http://localhost:6003", "http://localhost:6004",
             "https://supp.sabbpe.com", "https://suppprod.sabbpe.com",
             "https://onboardinguat.sabbpe.com", "https://onboarding.sabbpe.com"
         ));

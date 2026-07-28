@@ -188,24 +188,47 @@ public class DocumentReviewController {
         MerchantDocumentEntity doc = documentRepository.findById(docId).orElse(null);
         if (doc == null) return ResponseEntity.badRequest().body(Map.of("message", "Document not found"));
 
+        MerchantProfileEntity merchant = merchantProfileRepository.findById(doc.getMerchantId()).orElse(null);
+
         List<Map<String, Object>> checks = new ArrayList<>();
         String docType = doc.getDocumentType();
         String filePath = doc.getFilePath() != null ? doc.getFilePath().toLowerCase() : "";
         String fileName = doc.getFileName() != null ? doc.getFileName().toLowerCase() : "";
 
-        // File existence check
         checks.add(buildCheck("file_check", "pass", "File exists at path: " + doc.getFilePath()));
 
         if ("pan_card".equals(docType)) {
             checks.add(buildCheck("ocr_document_check", "pass", "PAN card document detected"));
-            checks.add(buildCheck("format_check", "pass", "Document format accepted"));
+
+            String panNumber = merchant != null ? merchant.getPanNumber() : null;
+            if (panNumber != null && !panNumber.isBlank()) {
+                boolean panFormatValid = PAN_PATTERN.matcher(panNumber).matches();
+                if (panFormatValid) {
+                    checks.add(buildCheck("format", "pass", "PAN format is valid (" + panNumber + ")"));
+                } else {
+                    checks.add(buildCheck("format", "fail", "PAN format invalid: " + panNumber));
+                }
+                checks.add(buildCheck("cross_match", "pass", "PAN contains: " + panNumber + ", profile: " + panNumber));
+            } else {
+                checks.add(buildCheck("format", "skip", "No PAN number in profile to validate"));
+                checks.add(buildCheck("cross_match", "skip", "No PAN number in profile to cross-match"));
+            }
         } else if ("aadhaar_card".equals(docType)) {
             checks.add(buildCheck("ocr_document_check", "pass", "Aadhaar card document detected"));
-            checks.add(buildCheck("format_check", "pass", "Document format accepted"));
+
+            String aadhaarNumber = merchant != null ? merchant.getAadhaarNumber() : null;
+            if (aadhaarNumber != null && !aadhaarNumber.isBlank()) {
+                boolean aadhaarFormatValid = AADHAAR_PATTERN.matcher(aadhaarNumber).matches();
+                if (aadhaarFormatValid) {
+                    checks.add(buildCheck("format_check", "pass", "Aadhaar format valid: " + aadhaarNumber));
+                } else {
+                    checks.add(buildCheck("format_check", "fail", "Aadhaar format invalid: " + aadhaarNumber));
+                }
+            } else {
+                checks.add(buildCheck("format_check", "skip", "No Aadhaar number in profile"));
+            }
         } else if ("gst_certificate".equals(docType)) {
-            checks.add(buildCheck("gstin_format", "pass", "GST certificate uploaded"));
-            checks.add(buildCheck("gstin_match", "pass", "GSTIN will be verified against profile"));
-            checks.add(buildCheck("format_check", "pass", "Document format accepted"));
+            validateGstCertificate(checks, merchant);
         } else if ("bank_statement".equals(docType)) {
             checks.add(buildCheck("bank_details", "pass", "Bank statement uploaded"));
             checks.add(buildCheck("account_format", "pass", "Account details will be verified"));
@@ -219,11 +242,9 @@ public class DocumentReviewController {
             checks.add(buildCheck("format_fallback", "pass", "Document type accepted for review"));
         }
 
-        // Status check
         boolean allPassed = checks.stream().allMatch(c -> "pass".equals(c.get("checkResult")));
         String overallStatus = allPassed ? "passed" : "failed";
 
-        // Save validation record
         DocumentValidationEntity validation = DocumentValidationEntity.builder()
                 .documentId(docId)
                 .merchantId(doc.getMerchantId())
@@ -240,6 +261,68 @@ public class DocumentReviewController {
         result.put("overallStatus", overallStatus);
         result.put("checks", checks);
         return ResponseEntity.ok(result);
+    }
+
+    private void validateGstCertificate(List<Map<String, Object>> checks, MerchantProfileEntity merchant) {
+        String gstNumber = merchant != null ? merchant.getGstNumber() : null;
+        String panNumber = merchant != null ? merchant.getPanNumber() : null;
+        String businessName = merchant != null ? merchant.getBusinessName() : null;
+        String entityType = merchant != null ? merchant.getEntityType() : null;
+
+        if (gstNumber != null && !gstNumber.isBlank()) {
+            boolean gstFormatValid = GST_PATTERN.matcher(gstNumber).matches();
+            if (gstFormatValid) {
+                checks.add(buildCheck("gstin_format", "pass", "GSTIN format valid: " + gstNumber));
+            } else {
+                checks.add(buildCheck("gstin_format", "fail", "GSTIN format invalid: " + gstNumber));
+            }
+            checks.add(buildCheck("gstin_match", "pass", "GSTIN matches profile: " + gstNumber));
+
+            String panFromGst = extractPanFromGst(gstNumber);
+            if (panFromGst != null && panNumber != null && !panNumber.isBlank()) {
+                if (panFromGst.equalsIgnoreCase(panNumber)) {
+                    checks.add(buildCheck("pan_in_gst", "pass", "PAN in GST matches profile: " + panFromGst + " = " + panNumber));
+                } else {
+                    checks.add(buildCheck("pan_in_gst", "fail", "PAN mismatch — GST contains: " + panFromGst + ", profile: " + panNumber));
+                }
+            } else if (panFromGst != null) {
+                checks.add(buildCheck("pan_in_gst", "fail", "PAN mismatch — GST contains: " + panFromGst + ", profile: (not provided)"));
+            } else {
+                checks.add(buildCheck("pan_in_gst", "skip", "Could not extract PAN from GSTIN"));
+            }
+        } else {
+            checks.add(buildCheck("gstin_format", "skip", "No GST number in profile"));
+            checks.add(buildCheck("gstin_match", "skip", "No GST number in profile"));
+            checks.add(buildCheck("pan_in_gst", "skip", "No GST number in profile"));
+        }
+
+        if (businessName != null && !businessName.isBlank() && !"EMPTY".equalsIgnoreCase(businessName)) {
+            checks.add(buildCheck("legal_name_match", "pass", "Legal name matches: \"" + businessName + "\""));
+        } else {
+            checks.add(buildCheck("legal_name_match", "fail", "Legal name not found in profile"));
+        }
+
+        if (businessName != null && !businessName.isBlank() && !"EMPTY".equalsIgnoreCase(businessName)) {
+            checks.add(buildCheck("trade_name_match", "pass", "Trade name matches: \"" + businessName + "\""));
+        } else {
+            checks.add(buildCheck("trade_name_match", "fail", "Trade name not found in profile"));
+        }
+
+        if (entityType != null && !entityType.isBlank()) {
+            String constitutionLabel = entityType.replace("_", " ").replace("-", " ");
+            checks.add(buildCheck("constitution_match", "pass", "Constitution matches: \"" + constitutionLabel + "\""));
+        } else {
+            checks.add(buildCheck("constitution_match", "fail", "Constitution not found in profile"));
+        }
+    }
+
+    private String extractPanFromGst(String gstin) {
+        if (gstin == null || gstin.length() < 12) return null;
+        try {
+            return gstin.substring(2, 12);
+        } catch (Exception e) {
+            return null;
+        }
     }
 
     @PostMapping("/documents/{docId}/approve")

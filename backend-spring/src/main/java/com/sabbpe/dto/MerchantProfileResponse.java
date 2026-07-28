@@ -168,6 +168,9 @@ public class MerchantProfileResponse {
         private String mimeType;
         private String status;
         private String docCategory;
+        private LocalDateTime uploadedAt;
+        private LocalDateTime verifiedAt;
+        private String rejectionReason;
     }
 
     @Data

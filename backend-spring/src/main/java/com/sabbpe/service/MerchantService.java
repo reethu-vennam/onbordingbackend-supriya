@@ -449,6 +449,9 @@ public class MerchantService {
                             .mimeType(d.getMimeType())
                             .status(d.getStatus())
                             .docCategory(d.getDocCategory())
+                            .uploadedAt(d.getUploadedAt())
+                            .verifiedAt(d.getVerifiedAt())
+                            .rejectionReason(d.getRejectionReason())
                             .build())
                     .collect(Collectors.toList());
             builder.documents(docs);

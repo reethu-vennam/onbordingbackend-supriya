@@ -51,6 +51,9 @@ public class MerchantProfileEntity {
     @Column(name = "onboarding_status", nullable = false, length = 30)
     private String onboardingStatus = "draft";
 
+    @Column(name = "application_id", length = 50)
+    private String applicationId;
+
     @Column(name = "onboarding_score")
     private Double onboardingScore;
 
