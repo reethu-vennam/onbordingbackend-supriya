@@ -616,6 +616,7 @@ BEGIN
     WHERE id = p_merchant_id;
 END //
 
+
 DELIMITER ;
 
 -- =====================================================
