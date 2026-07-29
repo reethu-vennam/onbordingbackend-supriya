@@ -18,6 +18,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -32,34 +33,68 @@ public class TransactionService {
     private final ObjectMapper objectMapper;
 
     @Transactional
-    public void storeTransactionId(String userId, String transactionId) {
+    public Map<String, Object> storeTransactionId(String userId, String transactionId) {
         MerchantProfileEntity merchant = merchantProfileRepository.findByUserId(userId)
                 .orElseThrow(() -> new ResourceNotFoundException("Merchant", "userId", userId));
 
-        if (merchant.getTransactionId() != null) {
-            log.info("Transaction ID already set for merchant {}, skipping", userId);
-            return;
+        String existing = merchant.getTransactionId();
+        if (existing != null && existing.equals(transactionId)) {
+            log.info("Transaction ID already same for merchant {}, skipping", userId);
+            return Map.of("outcome", "skipped", "merchantId", merchant.getId(), "transactionId", transactionId);
         }
 
         merchant.setTransactionId(transactionId);
+        merchant.setTxnDetails(null);
         merchantProfileRepository.save(merchant);
-        log.info("Stored transaction_id {} for merchant {}", transactionId, userId);
+        log.info("Stored transaction_id {} for merchant {} (previous was {})", transactionId, userId, existing);
+        return Map.of("outcome", "stored", "merchantId", merchant.getId(), "transactionId", transactionId);
     }
 
     @Transactional
-    public void storeTxnDetails(String transactionId, String txnDetailsJson) {
+    public Map<String, Object> storeTxnDetails(String transactionId, String txnDetailsJson) {
         MerchantProfileEntity merchant = merchantProfileRepository.findByTransactionId(transactionId)
-                .orElseThrow(() -> new ResourceNotFoundException("Merchant", "transactionId", transactionId));
+                .orElse(null);
+
+        if (merchant == null) {
+            return Map.of("outcome", "not_found", "transactionId", transactionId);
+        }
+
+        if (merchant.getTxnDetails() != null) {
+            log.info("Txn details already stored for transaction_id {}, skipping", transactionId);
+            return Map.of("outcome", "skipped", "merchantId", merchant.getId(), "transactionId", transactionId);
+        }
 
         merchant.setTxnDetails(txnDetailsJson);
         merchantProfileRepository.save(merchant);
         log.info("Stored txn_details for transaction_id {}", transactionId);
+        return Map.of("outcome", "stored", "merchantId", merchant.getId(), "transactionId", transactionId);
     }
 
     public String getTransactionId(String userId) {
         MerchantProfileEntity merchant = merchantProfileRepository.findByUserId(userId)
                 .orElseThrow(() -> new ResourceNotFoundException("Merchant", "userId", userId));
         return merchant.getTransactionId();
+    }
+
+    public Map<String, Object> getMerchantTransactionId(String userId) {
+        MerchantProfileEntity merchant = merchantProfileRepository.findByUserId(userId)
+                .orElseThrow(() -> new ResourceNotFoundException("Merchant", "userId", userId));
+        return Map.of("transactionId", merchant.getTransactionId() != null ? merchant.getTransactionId() : "");
+    }
+
+    public Map<String, Object> getTransactionDetails(String userId, String transactionId) {
+        MerchantProfileEntity merchant = merchantProfileRepository.findByUserId(userId)
+                .orElseThrow(() -> new ResourceNotFoundException("Merchant", "userId", userId));
+
+        if (merchant.getTransactionId() == null || !merchant.getTransactionId().equals(transactionId)) {
+            throw new ResourceNotFoundException("Merchant", "transactionId", transactionId);
+        }
+
+        return Map.of(
+                "merchantId", merchant.getId(),
+                "transactionId", merchant.getTransactionId(),
+                "txnDetails", merchant.getTxnDetails() != null ? merchant.getTxnDetails() : ""
+        );
     }
 
     public String extractTransactionIdFromPayload(Object payload) {

@@ -28,6 +28,7 @@ public class MerchantService {
     private final OnboardingAuditLogRepository auditLogRepository;
     private final ValidationService validationService;
     private final NotificationService notificationService;
+    private final ProductService productService;
 
     private static final Set<String> VALID_STATUSES = Set.of(
             "draft", "submitted", "validating", "pending_bank_approval",
@@ -259,10 +260,17 @@ public class MerchantService {
 
     public IntegrationCostResponse getIntegrationCost(String userId) {
         MerchantProfileEntity merchant = getMerchantByUserId(userId);
+
+        BigDecimal integrationCost = productService.calculateIntegrationCost(merchant.getSelectedProducts());
+        BigDecimal monthlyCost = productService.calculateMonthlyCost(merchant.getSelectedProducts());
+        BigDecimal onetimeCost = productService.calculateOnetimeCost(merchant.getSelectedProducts());
+
         return IntegrationCostResponse.builder()
-                .totalIntegrationCost(merchant.getTotalIntegrationCost())
-                .totalMonthlyCost(merchant.getTotalMonthlyCost())
-                .totalOnetimeCost(merchant.getTotalOnetimeCost())
+                .merchantId(merchant.getId())
+                .userId(merchant.getUserId())
+                .totalIntegrationCost(integrationCost)
+                .totalMonthlyCost(monthlyCost)
+                .totalOnetimeCost(onetimeCost)
                 .build();
     }
 

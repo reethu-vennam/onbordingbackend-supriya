@@ -13,7 +13,13 @@ import java.math.BigDecimal;
 @AllArgsConstructor
 public class IntegrationCostResponse {
 
+    private String merchantId;
+
+    private String userId;
+
     private BigDecimal totalIntegrationCost;
+
     private BigDecimal totalMonthlyCost;
+
     private BigDecimal totalOnetimeCost;
 }
