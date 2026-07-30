@@ -63,6 +63,7 @@ com\sabbpe\dto\ReserveLedgerResponse$ReserveLedgerResponseBuilder.class
 com\sabbpe\dto\OcrResult.class
 com\sabbpe\repository\UserRepository.class
 com\sabbpe\dto\ChargebackSummaryResponse$ChargebackSummaryResponseBuilder.class
+com\sabbpe\config\AppConfig$1.class
 com\sabbpe\model\MerchantProfileEntity.class
 com\sabbpe\model\MerchantDocumentEntity.class
 com\sabbpe\security\JwtAuthenticationFilter.class

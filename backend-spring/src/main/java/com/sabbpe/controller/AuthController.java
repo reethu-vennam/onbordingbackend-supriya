@@ -35,6 +35,9 @@ public class AuthController {
 
     @GetMapping("/me")
     public ResponseEntity<ApiResponse<UserDto>> me(@AuthenticationPrincipal CustomUserDetails userDetails) {
+        if (userDetails == null) {
+            return ResponseEntity.status(401).body(ApiResponse.error("AUTHENTICATION_REQUIRED", "No valid token provided"));
+        }
         UserDto user = authService.getCurrentUser(userDetails.getId());
         return ResponseEntity.ok(ApiResponse.success(user));
     }

@@ -5,10 +5,10 @@ spring:
   application:
     name: sabbpe-backend
   datasource:
-    url: jdbc:mariadb://34.47.168.236:7306/sabbpeonboarding?useSSL=false&allowPublicKeyRetrieval=true
+    url: ${DB_URL:jdbc:mariadb://34.47.168.236:7306/sabbpeonboarding?useSSL=false&allowPublicKeyRetrieval=true}
     driver-class-name: org.mariadb.jdbc.Driver
-    username: sbuser
-    password: KMmTKeK7yh77odw51gK12f
+    username: ${DB_USERNAME:sbuser}
+    password: ${DB_PASSWORD:KMmTKeK7yh77odw51gK12f}
     hikari:
       maximum-pool-size: 20
       minimum-idle: 5
@@ -29,12 +29,17 @@ spring:
   jackson:
     serialization:
       write-dates-as-timestamps: false
-    date-format: yyyy-MM-dd'T'HH:mm:ss
+    date-format: yyyy-MM-dd'T'HH:mm:ss'Z'
     time-zone: UTC
+  mvc:
+    throw-exception-if-no-handler-found: true
+  web:
+    resources:
+      add-mappings: false
   servlet:
     multipart:
-      max-file-size: 50MB
-      max-request-size: 50MB
+      max-file-size: ${MAX_FILE_SIZE:50MB}
+      max-request-size: ${MAX_FILE_SIZE:50MB}
 
 app:
   jwt:
@@ -42,7 +47,7 @@ app:
     expiration-ms: 86400000
     refresh-expiration-ms: 2592000000
   cors:
-    allowed-origins: ${CORS_ORIGINS:http://localhost:3000,http://localhost:5173,http://localhost:8877}
+    allowed-origins: ${CORS_ORIGINS:http://localhost:3000,http://localhost:5173,http://localhost:8877,http://localhost:8878,http://localhost:3002,http://localhost:3003,http://localhost:6003,https://onboarding.sabbpe.com,https://bank.sabbpe.com,https://support.sabbpe.com}
 
   transbank:
     base-url: ${TRANSBANK_BASE_URL:https://transbank.sabbpe.com/api}
@@ -61,6 +66,8 @@ app:
     port: ${EMAIL_PORT:465}
     username: ${EMAIL_USERNAME:${EMAIL_USER:payments@sabbpe.com}}
     password: ${EMAIL_PASSWORD:${EMAIL_PASS:Tjk5hLgsSKt4}}
+    secure: ${EMAIL_SECURE:true}
+    from: ${EMAIL_FROM:payments@sabbpe.com}
 
   settlement:
     dry-run: ${SETTLEMENT_DRY_RUN:false}
@@ -80,10 +87,20 @@ app:
     integrated-number: ${MSG91_INTEGRATED_NUMBER:917304513157}
     template-name: ${MSG91_TEMPLATE_NAME:ekyc_verification}
     namespace: ${MSG91_NAMESPACE:}
+    sms-flow-url: ${MSG91_SMS_FLOW_URL:https://control.msg91.com/api/v5/flow}
+    sms-template-id: ${MSG91_SMS_TEMPLATE_ID:694e236ec594fc01ba61af73}
+    invite-template: ${MSG91_INVITE_TEMPLATE:merchantinv}
+    invite-namespace: ${MSG91_INVITE_NAMESPACE:merchant_onboarding}
+
+  demo:
+    access-key: ${DEMO_ACCESS_KEY:SABBPE_DEMO_2026}
+
+  admin:
+    email: ${ADMIN_EMAIL:payments@sabbpe.com}
 
 logging:
   level:
     root: INFO
-    com.sabbpe: DEBUG
+    com.sabbpe: ${LOG_LEVEL:DEBUG}
     org.springframework.security: INFO
     org.hibernate.SQL: WARN
