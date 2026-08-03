@@ -8,9 +8,7 @@ import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.Paths;
+import java.nio.file.*;
 import java.util.Map;
 import java.util.UUID;
 
@@ -39,35 +37,42 @@ public class UploadController {
 
             String storedPath;
             if (filePath != null && !filePath.isBlank()) {
-                storedPath = filePath;
+                // Sanitize: remove leading slashes, use forward slashes
+                storedPath = filePath.replace("\\", "/").replaceAll("^/+", "");
             } else {
                 storedPath = UUID.randomUUID().toString() + extension;
             }
 
-            Path uploadPath = Paths.get(uploadDir);
-            if (!Files.exists(uploadPath)) {
-                Files.createDirectories(uploadPath);
+            Path uploadPath = Paths.get(uploadDir).toAbsolutePath().normalize();
+            Path fileDestination = uploadPath.resolve(storedPath).normalize();
+
+            // Security: ensure resolved path is still inside uploadDir
+            if (!fileDestination.startsWith(uploadPath)) {
+                return ResponseEntity.badRequest().body(ApiResponse.error("BAD_REQUEST", "Invalid file path"));
             }
 
-            Path fileDir = uploadPath.resolve(storedPath).getParent();
-            if (fileDir != null && !Files.exists(fileDir)) {
-                Files.createDirectories(fileDir);
+            // Create parent directories if needed
+            Path parentDir = fileDestination.getParent();
+            if (parentDir != null && !Files.exists(parentDir)) {
+                Files.createDirectories(parentDir);
             }
 
-            Path fileDestination = uploadPath.resolve(storedPath);
-            Files.copy(file.getInputStream(), fileDestination);
+            // Delete existing file if present, then copy
+            Files.deleteIfExists(fileDestination);
+            Files.copy(file.getInputStream(), fileDestination, StandardCopyOption.REPLACE_EXISTING);
 
+            String publicUrl = "/uploads/" + storedPath;
             log.info("File uploaded: {} -> {}", originalFilename, fileDestination);
 
             return ResponseEntity.ok(ApiResponse.success(Map.of(
-                    "url", "/uploads/" + storedPath,
+                    "url", publicUrl,
                     "filename", storedPath,
-                    "originalName", originalFilename,
+                    "originalName", originalFilename != null ? originalFilename : "",
                     "size", file.getSize(),
-                    "mimeType", file.getContentType()
+                    "mimeType", file.getContentType() != null ? file.getContentType() : ""
             )));
         } catch (IOException e) {
-            log.error("File upload failed", e);
+            log.error("File upload failed: {}", e.getMessage(), e);
             return ResponseEntity.status(500)
                     .body(ApiResponse.error("UPLOAD_ERROR", "File upload failed: " + e.getMessage()));
         }

@@ -239,14 +239,11 @@ public class DistributorService {
     @Transactional
     public void saveBankDetails(String distributorUserId, String merchantProfileId,
                                  String accountNumber, String ifscCode, String bankName, String accountHolderName) {
-        MerchantProfileEntity merchant = getMerchantAndVerifyDistributor(merchantProfileId, distributorUserId);
+        getMerchantAndVerifyDistributor(merchantProfileId, distributorUserId);
 
-        MerchantBankDetailEntity bank = bankDetailRepository.findByMerchantId(merchantProfileId).orElse(null);
-        if (bank == null) {
-            bank = new MerchantBankDetailEntity();
-            bank.setId(UUID.randomUUID().toString());
-            bank.setMerchantId(merchantProfileId);
-        }
+        MerchantBankDetailEntity bank = new MerchantBankDetailEntity();
+        bank.setId(UUID.randomUUID().toString());
+        bank.setMerchantId(merchantProfileId);
         bank.setAccountNumber(accountNumber);
         bank.setIfscCode(ifscCode);
         bank.setBankName(bankName);
@@ -301,12 +298,9 @@ public class DistributorService {
                 String bankName = (String) request.getBankDetails().getOrDefault("bankName", "");
                 String holder = (String) request.getBankDetails().getOrDefault("accountHolderName", "");
                 if (!acct.isBlank() && !ifsc.isBlank()) {
-                    MerchantBankDetailEntity bank = bankDetailRepository.findByMerchantId(merchantId).orElse(null);
-                    if (bank == null) {
-                        bank = new MerchantBankDetailEntity();
-                        bank.setId(UUID.randomUUID().toString());
-                        bank.setMerchantId(merchantId);
-                    }
+                    MerchantBankDetailEntity bank = new MerchantBankDetailEntity();
+                    bank.setId(UUID.randomUUID().toString());
+                    bank.setMerchantId(merchantId);
                     bank.setAccountNumber(acct);
                     bank.setIfscCode(ifsc);
                     bank.setBankName(bankName);
@@ -471,7 +465,7 @@ public class DistributorService {
         // Cascade delete related records
         documentRepository.findByMerchantId(merchantId).forEach(d -> documentRepository.delete(d));
         personRepository.findByMerchantIdOrderBySequenceOrderAsc(merchantId).forEach(p -> personRepository.delete(p));
-        bankDetailRepository.findByMerchantId(merchantId).ifPresent(b -> bankDetailRepository.delete(b));
+        bankDetailRepository.findByMerchantId(merchantId).forEach(b -> bankDetailRepository.delete(b));
         kycRepository.findByMerchantId(merchantId).ifPresent(k -> kycRepository.delete(k));
         subProductRepository.findByMerchantProfileId(merchantId).forEach(sp -> subProductRepository.delete(sp));
 
