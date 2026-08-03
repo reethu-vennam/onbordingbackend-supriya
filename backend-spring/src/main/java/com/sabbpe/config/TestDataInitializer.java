@@ -7,15 +7,22 @@ import com.sabbpe.repository.UserRoleRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.CommandLineRunner;
+import org.springframework.context.annotation.Profile;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.UUID;
 
+/**
+ * Seeds/resets a local admin login for development convenience.
+ * Restricted to local profiles only — must never run against the shared/prod database,
+ * since it unconditionally overwrites the admin password on every startup.
+ */
 @Slf4j
 @Component
 @RequiredArgsConstructor
+@Profile({"dev", "h2"})
 public class TestDataInitializer implements CommandLineRunner {
 
     private final UserRepository userRepository;
