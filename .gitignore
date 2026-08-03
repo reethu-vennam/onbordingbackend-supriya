@@ -1,0 +1,12 @@
+target/
+*.war
+*.war.original
+!.mvn/wrapper/maven-wrapper.jar
+.idea/
+*.iml
+*.ipr
+*.iws
+.vscode/
+.classpath
+.project
+.settings/
