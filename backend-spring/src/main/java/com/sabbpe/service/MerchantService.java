@@ -7,6 +7,7 @@ import com.sabbpe.model.*;
 import com.sabbpe.repository.*;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -72,7 +73,7 @@ public class MerchantService {
         return buildResponse(merchant);
     }
 
-    @Transactional
+    @Transactional(noRollbackFor = DataIntegrityViolationException.class)
     public MerchantProfileResponse saveOrUpdateProfile(String userId, MerchantProfileRequest request) {
         MerchantProfileEntity merchant = merchantProfileRepository.findByUserId(userId).orElse(null);
 
@@ -83,8 +84,9 @@ public class MerchantService {
             merchant.setOnboardingStatus("draft");
         } else {
             if (!"draft".equals(merchant.getOnboardingStatus())
-                    && !"rejected".equals(merchant.getOnboardingStatus())) {
-                throw new BadRequestException("Profile can only be edited in draft or rejected status");
+                    && !"rejected".equals(merchant.getOnboardingStatus())
+                    && !"submitted".equals(merchant.getOnboardingStatus())) {
+                throw new BadRequestException("Profile can only be edited in draft, rejected, or submitted status");
             }
         }
 
@@ -94,7 +96,7 @@ public class MerchantService {
         if (request.getPersons() != null) {
             savePersons(merchant.getId(), request.getPersons());
         }
-        if (request.getBankDetails() != null) {
+        if (request.getBankDetails() != null && !request.getBankDetails().isEmpty()) {
             saveBankDetails(merchant.getId(), request.getBankDetails());
         }
         if (request.getKyc() != null) {
@@ -274,23 +276,44 @@ public class MerchantService {
                 .build();
     }
 
-    private void saveBankDetails(String merchantId, MerchantProfileRequest.BankDetailRequest request) {
-        validationService.validateBankDetailsRequest(
-                request.getAccountNumber(), request.getIfscCode(),
-                request.getAccountHolderName(), request.getBankName());
+    private void saveBankDetails(String merchantId, List<MerchantProfileRequest.BankDetailRequest> requests) {
+        List<MerchantBankDetailEntity> existing = bankDetailRepository.findByMerchantId(merchantId);
 
-        MerchantBankDetailEntity bank = bankDetailRepository.findByMerchantId(merchantId).orElse(null);
-        if (bank == null) {
-            bank = new MerchantBankDetailEntity();
-            bank.setId(UUID.randomUUID().toString());
-            bank.setMerchantId(merchantId);
+        for (MerchantProfileRequest.BankDetailRequest req : requests) {
+            validationService.validateBankDetailsRequest(
+                    req.getAccountNumber(), req.getIfscCode(),
+                    req.getAccountHolderName(), req.getBankName());
+
+            MerchantBankDetailEntity bank = existing.stream()
+                    .filter(e -> e.getAccountNumber().equals(req.getAccountNumber()) && e.getIfscCode().equals(req.getIfscCode()))
+                    .findFirst().orElse(null);
+
+            if (bank == null) {
+                bank = new MerchantBankDetailEntity();
+                bank.setId(UUID.randomUUID().toString());
+                bank.setMerchantId(merchantId);
+            }
+            bank.setAccountNumber(req.getAccountNumber());
+            bank.setIfscCode(req.getIfscCode());
+            bank.setBankName(req.getBankName());
+            bank.setAccountHolderName(req.getAccountHolderName());
+            bank.setUpiVpa(req.getUpiVpa());
+            try {
+                bankDetailRepository.save(bank);
+            } catch (DataIntegrityViolationException e) {
+                log.warn("Could not save additional bank detail for merchant {} — DB may still have UNIQUE constraint. Run V6 migration.", merchantId);
+            }
         }
-        bank.setAccountNumber(request.getAccountNumber());
-        bank.setIfscCode(request.getIfscCode());
-        bank.setBankName(request.getBankName());
-        bank.setAccountHolderName(request.getAccountHolderName());
-        bank.setUpiVpa(request.getUpiVpa());
-        bankDetailRepository.save(bank);
+
+        List<String> requestKeys = requests.stream()
+                .map(r -> r.getAccountNumber() + "|" + r.getIfscCode())
+                .collect(Collectors.toList());
+        for (MerchantBankDetailEntity e : existing) {
+            String key = e.getAccountNumber() + "|" + e.getIfscCode();
+            if (!requestKeys.contains(key)) {
+                bankDetailRepository.delete(e);
+            }
+        }
     }
 
     private void savePersons(String merchantId, List<MerchantProfileRequest.PersonRequest> persons) {
@@ -431,16 +454,19 @@ public class MerchantService {
                 .updatedAt(m.getUpdatedAt());
 
         try {
-            MerchantBankDetailEntity bank = bankDetailRepository.findByMerchantId(m.getId()).orElse(null);
-            if (bank != null) {
-                builder.bankDetails(MerchantProfileResponse.BankDetailDto.builder()
-                        .id(bank.getId())
-                        .accountNumber(maskString(bank.getAccountNumber()))
-                        .ifscCode(bank.getIfscCode())
-                        .bankName(bank.getBankName())
-                        .accountHolderName(bank.getAccountHolderName())
-                        .upiVpa(bank.getUpiVpa())
-                        .build());
+            List<MerchantBankDetailEntity> banks = bankDetailRepository.findByMerchantId(m.getId());
+            if (!banks.isEmpty()) {
+                List<MerchantProfileResponse.BankDetailDto> bankDtos = banks.stream()
+                        .map(bank -> MerchantProfileResponse.BankDetailDto.builder()
+                                .id(bank.getId())
+                                .accountNumber(maskString(bank.getAccountNumber()))
+                                .ifscCode(bank.getIfscCode())
+                                .bankName(bank.getBankName())
+                                .accountHolderName(bank.getAccountHolderName())
+                                .upiVpa(bank.getUpiVpa())
+                                .build())
+                        .collect(Collectors.toList());
+                builder.bankDetails(bankDtos);
             }
         } catch (Exception e) {
             log.debug("No bank details for merchant {}", m.getId());

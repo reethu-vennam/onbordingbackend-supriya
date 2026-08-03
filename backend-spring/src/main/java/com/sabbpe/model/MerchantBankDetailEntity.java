@@ -21,7 +21,7 @@ public class MerchantBankDetailEntity {
     @Column(name = "id", length = 36)
     private String id;
 
-    @Column(name = "merchant_id", nullable = false, unique = true, length = 36)
+    @Column(name = "merchant_id", nullable = false, length = 36)
     private String merchantId;
 
     @Column(name = "account_number", nullable = false, length = 50)

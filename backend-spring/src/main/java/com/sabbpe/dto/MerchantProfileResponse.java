@@ -122,7 +122,7 @@ public class MerchantProfileResponse {
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 
-    private BankDetailDto bankDetails;
+    private List<BankDetailDto> bankDetails;
     private List<KycDto> kyc;
     private List<DocumentDto> documents;
     private List<PersonDto> persons;

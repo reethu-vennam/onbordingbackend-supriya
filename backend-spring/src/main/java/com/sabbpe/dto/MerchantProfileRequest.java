@@ -32,7 +32,7 @@ public class MerchantProfileRequest {
 
     private String selectedProducts;
     private List<PersonRequest> persons;
-    private BankDetailRequest bankDetails;
+    private List<BankDetailRequest> bankDetails;
     private KycRequest kyc;
     private List<DocumentRequest> documents;
 
