@@ -17,7 +17,7 @@ public class ValidationService {
     private static final Pattern PHONE_PATTERN =
             Pattern.compile("^\\+?[\\d\\s\\-()]+$");
     private static final Pattern IFSC_PATTERN =
-            Pattern.compile("^[A-Za-z]{4}[0-9]{7}$");
+            Pattern.compile("^[A-Za-z]{4}0[A-Za-z0-9]{6}$");
     private static final Pattern PAN_PATTERN =
             Pattern.compile("^[A-Z]{5}[0-9]{4}[A-Z]{1}$");
     private static final Pattern GST_PATTERN =
