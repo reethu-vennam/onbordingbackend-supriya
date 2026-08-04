@@ -41,8 +41,6 @@ app:
     secret: ${JWT_SECRET:TXlTdXBlclNlY3JldEtleUZvclNhYmJQZUpXVDIwMjZUaGlzSXNWZXJ5TG9uZ0FuZFNlY3VyZQ==}
     expiration-ms: 86400000
     refresh-expiration-ms: 2592000000
-  # CORS for deployed environments is owned by the reverse proxy, not this app.
-  # Local-dev-only CORS origins are hardcoded in SecurityConfig.LOCAL_DEV_ORIGINS.
 
   transbank:
     base-url: ${TRANSBANK_BASE_URL:https://transbank.sabbpe.com/api}

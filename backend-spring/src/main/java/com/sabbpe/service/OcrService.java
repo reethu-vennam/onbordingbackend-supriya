@@ -1,6 +1,7 @@
 package com.sabbpe.service;
 
 import com.sabbpe.dto.OcrResult;
+
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.io.ByteArrayResource;
@@ -25,16 +26,13 @@ public class OcrService {
 
     private static final String OCR_SPACE_URL = "https://api.ocr.space/parse/image";
 
-    private static final Pattern AADHAAR_PATTERN =
-        Pattern.compile("\\d{4}[\\s-]?\\d{4}[\\s-]?\\d{4}");
-    private static final Pattern AADHAAR_PATTERN_NO_SEP =
-        Pattern.compile("\\d{12}");
+    private static final Pattern AADHAAR_PATTERN = Pattern.compile("\\d{4}[\\s-]?\\d{4}[\\s-]?\\d{4}");
+    private static final Pattern AADHAAR_PATTERN_NO_SEP = Pattern.compile("\\d{12}");
 
     private static final Set<String> EXCLUDE_WORDS = Set.of(
-        "INCOME", "TAX", "DEPARTMENT", "GOVT", "GOVERNMENT", "INDIA",
-        "PERMANENT", "ACCOUNT", "NUMBER", "SIGNATURE", "PAN", "UNIQUE", "IDENTIFICATION",
-        "AUTHORITY", "AADHAAR", "MALE", "FEMALE", "DOB", "VID"
-    );
+            "INCOME", "TAX", "DEPARTMENT", "GOVT", "GOVERNMENT", "INDIA",
+            "PERMANENT", "ACCOUNT", "NUMBER", "SIGNATURE", "PAN", "UNIQUE", "IDENTIFICATION",
+            "AUTHORITY", "AADHAAR", "MALE", "FEMALE", "DOB", "VID");
 
     private final RestTemplate restTemplate;
 
@@ -92,7 +90,8 @@ public class OcrService {
                 if (results instanceof List && !((List) results).isEmpty()) {
                     Map firstResult = (Map) ((List) results).get(0);
                     String parsedText = (String) firstResult.get("ParsedText");
-                    log.info("OCR.space parsed text: {}", parsedText != null ? parsedText.substring(0, Math.min(parsedText.length(), 200)) : "null");
+                    log.info("OCR.space parsed text: {}",
+                            parsedText != null ? parsedText.substring(0, Math.min(parsedText.length(), 200)) : "null");
                     return parsedText;
                 } else {
                     log.warn("OCR.space no parsed results. Full response: {}", response.getBody());
@@ -110,9 +109,9 @@ public class OcrService {
         String cleanForRegex = rawText.replaceAll("[^\\w\\s/-]", " ").replaceAll("\\s+", " ");
 
         List<String> lines = Arrays.stream(rawText.split("\n"))
-            .map(String::trim)
-            .filter(l -> !l.isEmpty())
-            .collect(Collectors.toList());
+                .map(String::trim)
+                .filter(l -> !l.isEmpty())
+                .collect(Collectors.toList());
 
         boolean isPan = detectPan(clean);
         boolean isAadhaar = detectAadhaar(clean);
@@ -124,64 +123,64 @@ public class OcrService {
 
         if (isPan && panNumber != null) {
             return OcrResult.builder()
-                .panNumber(panNumber)
-                .extractedName(extractedName)
-                .dateOfBirth(dateOfBirth)
-                .confidence(90)
-                .rawText(rawText)
-                .build();
+                    .panNumber(panNumber)
+                    .extractedName(extractedName)
+                    .dateOfBirth(dateOfBirth)
+                    .confidence(90)
+                    .rawText(rawText)
+                    .build();
         }
         if (isAadhaar && aadhaarNumber != null) {
             return OcrResult.builder()
-                .aadhaarNumber(aadhaarNumber)
-                .extractedName(extractedName)
-                .dateOfBirth(dateOfBirth)
-                .confidence(90)
-                .rawText(rawText)
-                .build();
+                    .aadhaarNumber(aadhaarNumber)
+                    .extractedName(extractedName)
+                    .dateOfBirth(dateOfBirth)
+                    .confidence(90)
+                    .rawText(rawText)
+                    .build();
         }
         if (panNumber != null) {
             return OcrResult.builder()
-                .panNumber(panNumber)
-                .extractedName(extractedName)
-                .dateOfBirth(dateOfBirth)
-                .confidence(70)
-                .rawText(rawText)
-                .build();
+                    .panNumber(panNumber)
+                    .extractedName(extractedName)
+                    .dateOfBirth(dateOfBirth)
+                    .confidence(70)
+                    .rawText(rawText)
+                    .build();
         }
         if (aadhaarNumber != null) {
             return OcrResult.builder()
-                .aadhaarNumber(aadhaarNumber)
-                .extractedName(extractedName)
-                .dateOfBirth(dateOfBirth)
-                .confidence(70)
-                .rawText(rawText)
-                .build();
+                    .aadhaarNumber(aadhaarNumber)
+                    .extractedName(extractedName)
+                    .dateOfBirth(dateOfBirth)
+                    .confidence(70)
+                    .rawText(rawText)
+                    .build();
         }
         return OcrResult.builder().confidence(0).rawText(rawText).build();
     }
 
     private boolean detectPan(String clean) {
         List<Pattern> panPatterns = List.of(
-            Pattern.compile("INCOME\\s*TAX"),
-            Pattern.compile("PERMANENT\\s*ACCOUNT"),
-            Pattern.compile("GOVT?\\s*OF\\s*INDIA"),
-            Pattern.compile("\\bPAN\\b")
-        );
+                Pattern.compile("INCOME\\s*TAX"),
+                Pattern.compile("PERMANENT\\s*ACCOUNT"),
+                Pattern.compile("GOVT?\\s*OF\\s*INDIA"),
+                Pattern.compile("\\bPAN\\b"));
         long score = panPatterns.stream().filter(p -> p.matcher(clean).find()).count();
-        if (Pattern.compile("[A-Z]{5}[0-9]{4}[A-Z]").matcher(clean).find()) score += 2;
+        if (Pattern.compile("[A-Z]{5}[0-9]{4}[A-Z]").matcher(clean).find())
+            score += 2;
         return score > 0;
     }
 
     private boolean detectAadhaar(String clean) {
         List<Pattern> aadhaarPatterns = List.of(
-            Pattern.compile("UNIQUE\\s*IDENTIFICATION"),
-            Pattern.compile("GOVERNMENT\\s*OF\\s*INDIA"),
-            Pattern.compile("AADHAAR"),
-            Pattern.compile("\\bUID\\b")
-        );
+                Pattern.compile("UNIQUE\\s*IDENTIFICATION"),
+                Pattern.compile("GOVERNMENT\\s*OF\\s*INDIA"),
+                Pattern.compile("AADHAAR"),
+                Pattern.compile("\\bUID\\b"));
         long score = aadhaarPatterns.stream().filter(p -> p.matcher(clean).find()).count();
-        if (AADHAAR_PATTERN.matcher(clean).find()) score += 2;
+        if (AADHAAR_PATTERN.matcher(clean).find())
+            score += 2;
         return score > 0;
     }
 
@@ -210,8 +209,7 @@ public class OcrService {
         for (String line : lines) {
             String upper = line.toUpperCase();
             List<String> words = Arrays.asList(upper.split("\\s+"));
-            boolean hasExcluded = words.stream().anyMatch(w ->
-                EXCLUDE_WORDS.stream().anyMatch(w::contains));
+            boolean hasExcluded = words.stream().anyMatch(w -> EXCLUDE_WORDS.stream().anyMatch(w::contains));
             boolean isAllCaps = upper.equals(line.trim());
             boolean hasLetters = Pattern.compile("[A-Z]").matcher(line).find();
             boolean hasNumbers = Pattern.compile("[0-9]").matcher(line).find();

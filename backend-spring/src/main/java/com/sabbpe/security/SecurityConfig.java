@@ -14,27 +14,12 @@ import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
-import org.springframework.web.cors.CorsConfiguration;
-import org.springframework.web.cors.CorsConfigurationSource;
-import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 
-import java.util.List;
-
-/**
- * CORS is applied for localhost origins only. In deployed environments these
- * origins won't match any real request, so app-level CORS is effectively a
- * no-op — the reverse proxy still owns the real CORS policy.
- */
 @Configuration
 @EnableWebSecurity
 @EnableMethodSecurity
 @RequiredArgsConstructor
 public class SecurityConfig {
-
-    private static final List<String> LOCAL_DEV_ORIGINS = List.of(
-        "http://localhost:3000", "http://localhost:5173", "http://localhost:8877",
-        "http://localhost:8878", "http://localhost:3002", "http://localhost:3003", "http://localhost:6003"
-    );
 
     private final JwtAuthenticationFilter jwtAuthenticationFilter;
 
@@ -43,7 +28,6 @@ public class SecurityConfig {
         http
             .csrf(csrf -> csrf.disable())
             .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
-            .cors(cors -> cors.configurationSource(localDevCorsConfigurationSource()))
             .authorizeHttpRequests(auth -> auth
                 .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
                 .requestMatchers("/uploads/**").permitAll()
@@ -76,15 +60,4 @@ public class SecurityConfig {
         return authConfig.getAuthenticationManager();
     }
 
-    private CorsConfigurationSource localDevCorsConfigurationSource() {
-        CorsConfiguration configuration = new CorsConfiguration();
-        configuration.setAllowedOrigins(LOCAL_DEV_ORIGINS);
-        configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
-        configuration.setAllowedHeaders(List.of("Content-Type", "Authorization", "X-Requested-With", "X-Language", "X-Demo-Key"));
-        configuration.setAllowCredentials(true);
-
-        UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
-        source.registerCorsConfiguration("/**", configuration);
-        return source;
-    }
 }
