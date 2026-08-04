@@ -24,23 +24,11 @@ public class MerchantBankDetailEntity {
     @Column(name = "merchant_id", nullable = false, length = 36)
     private String merchantId;
 
-    @Column(name = "account_number", nullable = false, length = 50)
-    private String accountNumber;
-
-    @Column(name = "ifsc_code", nullable = false, length = 20)
-    private String ifscCode;
-
-    @Column(name = "bank_name", nullable = false)
-    private String bankName;
-
     @Column(name = "account_holder_name", nullable = false)
     private String accountHolderName;
 
-    @Column(name = "upi_vpa", length = 100)
-    private String upiVpa;
-
-    @Column(name = "upi_qr_string", columnDefinition = "TEXT")
-    private String upiQrString;
+    @Column(name = "bank_details_json", columnDefinition = "JSON")
+    private String bankDetailsJson;
 
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;

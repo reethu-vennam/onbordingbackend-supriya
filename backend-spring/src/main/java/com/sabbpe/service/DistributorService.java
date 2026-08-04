@@ -1,5 +1,7 @@
 package com.sabbpe.service;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.sabbpe.dto.*;
 import com.sabbpe.exception.BadRequestException;
@@ -241,14 +243,54 @@ public class DistributorService {
                                  String accountNumber, String ifscCode, String bankName, String accountHolderName) {
         getMerchantAndVerifyDistributor(merchantProfileId, distributorUserId);
 
-        MerchantBankDetailEntity bank = new MerchantBankDetailEntity();
-        bank.setId(UUID.randomUUID().toString());
-        bank.setMerchantId(merchantProfileId);
-        bank.setAccountNumber(accountNumber);
-        bank.setIfscCode(ifscCode);
-        bank.setBankName(bankName);
-        bank.setAccountHolderName(accountHolderName);
-        bankDetailRepository.save(bank);
+        MerchantBankDetailEntity bankDetail = bankDetailRepository.findByMerchantId(merchantProfileId)
+                .orElseGet(() -> {
+                    MerchantBankDetailEntity entity = new MerchantBankDetailEntity();
+                    entity.setMerchantId(merchantProfileId);
+                    entity.setAccountHolderName("");
+                    entity.setBankDetailsJson("[]");
+                    return entity;
+                });
+
+        List<Map<String, Object>> accounts;
+        try {
+            String json = bankDetail.getBankDetailsJson();
+            if (json == null || json.isBlank() || "null".equals(json)) {
+                accounts = new ArrayList<>();
+            } else {
+                accounts = objectMapper.readValue(json, new TypeReference<List<Map<String, Object>>>() {});
+            }
+        } catch (JsonProcessingException e) {
+            log.warn("Failed to parse bank_details_json for merchant {}: {}", merchantProfileId, e.getMessage());
+            accounts = new ArrayList<>();
+        }
+
+        Map<String, Object> existing = accounts.stream()
+                .filter(a -> Objects.equals(a.get("accountNumber"), accountNumber)
+                        && Objects.equals(a.get("ifscCode"), ifscCode))
+                .findFirst().orElse(null);
+
+        Map<String, Object> entry = new LinkedHashMap<>();
+        entry.put("accountNumber", accountNumber);
+        entry.put("ifscCode", ifscCode);
+        entry.put("bankName", bankName);
+        entry.put("accountHolderName", accountHolderName);
+        entry.put("upiVpa", null);
+
+        if (existing != null) {
+            existing.putAll(entry);
+        } else {
+            accounts.add(entry);
+        }
+
+        try {
+            bankDetail.setBankDetailsJson(objectMapper.writeValueAsString(accounts));
+        } catch (JsonProcessingException e) {
+            throw new BadRequestException("Failed to serialize bank details", "SERIALIZATION_ERROR");
+        }
+
+        bankDetail.setAccountHolderName(accountHolderName);
+        bankDetailRepository.save(bankDetail);
     }
 
     @Transactional
@@ -291,22 +333,51 @@ public class DistributorService {
         merchantProfileRepository.save(merchant);
 
         // Step 2: Save bank details
-        if (request.getBankDetails() != null) {
+        if (request.getBankDetails() != null && !request.getBankDetails().isEmpty()) {
             try {
-                String acct = (String) request.getBankDetails().getOrDefault("accountNumber", "");
-                String ifsc = (String) request.getBankDetails().getOrDefault("ifscCode", "");
-                String bankName = (String) request.getBankDetails().getOrDefault("bankName", "");
-                String holder = (String) request.getBankDetails().getOrDefault("accountHolderName", "");
-                if (!acct.isBlank() && !ifsc.isBlank()) {
-                    MerchantBankDetailEntity bank = new MerchantBankDetailEntity();
-                    bank.setId(UUID.randomUUID().toString());
-                    bank.setMerchantId(merchantId);
-                    bank.setAccountNumber(acct);
-                    bank.setIfscCode(ifsc);
-                    bank.setBankName(bankName);
-                    bank.setAccountHolderName(holder);
-                    bankDetailRepository.save(bank);
+                MerchantBankDetailEntity bankDetail = bankDetailRepository.findByMerchantId(merchantId)
+                        .orElseGet(() -> {
+                            MerchantBankDetailEntity entity = new MerchantBankDetailEntity();
+                            entity.setMerchantId(merchantId);
+                            entity.setAccountHolderName("");
+                            entity.setBankDetailsJson("[]");
+                            return entity;
+                        });
+
+                List<Map<String, Object>> accounts;
+                try {
+                    String json = bankDetail.getBankDetailsJson();
+                    if (json == null || json.isBlank() || "null".equals(json)) {
+                        accounts = new ArrayList<>();
+                    } else {
+                        accounts = objectMapper.readValue(json, new TypeReference<List<Map<String, Object>>>() {});
+                    }
+                } catch (JsonProcessingException e) {
+                    log.warn("Failed to parse bank_details_json: {}", e.getMessage());
+                    accounts = new ArrayList<>();
                 }
+
+                String primaryHolder = null;
+                for (Map<String, Object> detail : request.getBankDetails()) {
+                    String acct = (String) detail.getOrDefault("accountNumber", "");
+                    String ifsc = (String) detail.getOrDefault("ifscCode", "");
+                    String bkName = (String) detail.getOrDefault("bankName", "");
+                    String holder = (String) detail.getOrDefault("accountHolderName", "");
+                    if (!acct.isBlank() && !ifsc.isBlank()) {
+                        Map<String, Object> entry = new LinkedHashMap<>();
+                        entry.put("accountNumber", acct);
+                        entry.put("ifscCode", ifsc);
+                        entry.put("bankName", bkName);
+                        entry.put("accountHolderName", holder);
+                        entry.put("upiVpa", null);
+                        accounts.add(entry);
+                        if (primaryHolder == null) primaryHolder = holder;
+                    }
+                }
+
+                bankDetail.setBankDetailsJson(objectMapper.writeValueAsString(accounts));
+                if (primaryHolder != null) bankDetail.setAccountHolderName(primaryHolder);
+                bankDetailRepository.save(bankDetail);
             } catch (Exception e) {
                 log.warn("Failed to save bank details during submit: {}", e.getMessage());
             }
@@ -465,7 +536,7 @@ public class DistributorService {
         // Cascade delete related records
         documentRepository.findByMerchantId(merchantId).forEach(d -> documentRepository.delete(d));
         personRepository.findByMerchantIdOrderBySequenceOrderAsc(merchantId).forEach(p -> personRepository.delete(p));
-        bankDetailRepository.findByMerchantId(merchantId).forEach(b -> bankDetailRepository.delete(b));
+        bankDetailRepository.findByMerchantId(merchantId).ifPresent(b -> bankDetailRepository.delete(b));
         kycRepository.findByMerchantId(merchantId).ifPresent(k -> kycRepository.delete(k));
         subProductRepository.findByMerchantProfileId(merchantId).forEach(sp -> subProductRepository.delete(sp));
 

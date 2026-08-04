@@ -3,8 +3,6 @@ package com.sabbpe.security;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.core.env.Environment;
-import org.springframework.core.env.Profiles;
 import org.springframework.http.HttpMethod;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.config.annotation.authentication.configuration.AuthenticationConfiguration;
@@ -23,11 +21,9 @@ import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 import java.util.List;
 
 /**
- * In deployed environments, CORS is owned entirely by the reverse proxy in front of this
- * app, not here — do not re-add an app-level allow-list for those profiles.
- * The "dev"/"h2" profiles (no proxy in front locally) keep app-level CORS for localhost
- * origins so local development keeps working. OPTIONS is permitAll everywhere as a safety
- * net in case a preflight request ever reaches this app in a deployed environment.
+ * CORS is applied for localhost origins only. In deployed environments these
+ * origins won't match any real request, so app-level CORS is effectively a
+ * no-op — the reverse proxy still owns the real CORS policy.
  */
 @Configuration
 @EnableWebSecurity
@@ -41,15 +37,13 @@ public class SecurityConfig {
     );
 
     private final JwtAuthenticationFilter jwtAuthenticationFilter;
-    private final Environment environment;
 
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
-        boolean isLocalDev = environment.acceptsProfiles(Profiles.of("dev", "h2"));
-
         http
             .csrf(csrf -> csrf.disable())
             .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+            .cors(cors -> cors.configurationSource(localDevCorsConfigurationSource()))
             .authorizeHttpRequests(auth -> auth
                 .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
                 .requestMatchers("/uploads/**").permitAll()
@@ -68,10 +62,6 @@ public class SecurityConfig {
                 .anyRequest().authenticated()
             )
             .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
-
-        if (isLocalDev) {
-            http.cors(cors -> cors.configurationSource(localDevCorsConfigurationSource()));
-        }
 
         return http.build();
     }

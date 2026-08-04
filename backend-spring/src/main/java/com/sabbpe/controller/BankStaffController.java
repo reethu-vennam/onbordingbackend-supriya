@@ -1,14 +1,19 @@
 package com.sabbpe.controller;
 
 import com.sabbpe.dto.ApiResponse;
+import com.sabbpe.model.MerchantBankDetailEntity;
 import com.sabbpe.model.MerchantProfileEntity;
 import com.sabbpe.model.OnboardingAuditLogEntity;
+import com.sabbpe.repository.MerchantBankDetailRepository;
 import com.sabbpe.repository.MerchantProfileRepository;
 import com.sabbpe.repository.OnboardingAuditLogRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
 
 import java.time.LocalDateTime;
 import java.util.*;
@@ -22,6 +27,8 @@ public class BankStaffController {
 
     private final MerchantProfileRepository merchantProfileRepository;
     private final OnboardingAuditLogRepository auditLogRepository;
+    private final MerchantBankDetailRepository bankDetailRepository;
+    private final ObjectMapper objectMapper = new ObjectMapper();
 
     @PostMapping("/auth/login")
     public ResponseEntity<ApiResponse<Map<String, Object>>> login(@RequestBody Map<String, String> request) {
@@ -253,6 +260,21 @@ public class BankStaffController {
         map.put("totalMonthlyCost", m.getTotalMonthlyCost());
         map.put("totalOnetimeCost", m.getTotalOnetimeCost());
         map.put("selectedProducts", m.getSelectedProducts());
+
+        try {
+            Optional<MerchantBankDetailEntity> optBank = bankDetailRepository.findByMerchantId(m.getId());
+            if (optBank.isPresent()) {
+                String json = optBank.get().getBankDetailsJson();
+                if (json != null && !json.isBlank()) {
+                    List<Map<String, Object>> bankList = objectMapper.readValue(json,
+                            new TypeReference<List<Map<String, Object>>>() {});
+                    map.put("bank_details", bankList);
+                }
+            }
+        } catch (Exception e) {
+            log.warn("Failed to load bank_details for merchant {}: {}", m.getId(), e.getMessage());
+        }
+
         return map;
     }
 

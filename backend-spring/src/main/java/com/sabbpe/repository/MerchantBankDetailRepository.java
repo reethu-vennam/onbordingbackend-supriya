@@ -4,12 +4,12 @@ import com.sabbpe.model.MerchantBankDetailEntity;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 
-import java.util.List;
+import java.util.Optional;
 
 @Repository
 public interface MerchantBankDetailRepository extends JpaRepository<MerchantBankDetailEntity, String> {
 
-    List<MerchantBankDetailEntity> findByMerchantId(String merchantId);
+    Optional<MerchantBankDetailEntity> findByMerchantId(String merchantId);
 
     void deleteByMerchantId(String merchantId);
 }

@@ -20,7 +20,7 @@ public class SubmitMerchantOnboardingRequest {
     private String aadhaarNumber;
     private String gstNumber;
     private String entityType;
-    private Map<String, Object> bankDetails;
+    private List<Map<String, Object>> bankDetails;
     private Map<String, Object> kycData;
     private Map<String, Object> documents;
     private List<Map<String, Object>> persons;
