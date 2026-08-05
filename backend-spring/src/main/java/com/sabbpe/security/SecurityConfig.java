@@ -39,7 +39,7 @@ public class SecurityConfig {
                 .requestMatchers("/api/payment/**").permitAll()
                 .requestMatchers("/api/supabase/**").permitAll()
                 .requestMatchers("/api/demo/**").permitAll()
-                .requestMatchers("/api/bank/auth/**").permitAll()
+                .requestMatchers("/api/bank/**").permitAll()
                 .requestMatchers("/api/support/auth/**").permitAll()
                 .requestMatchers("/api/debug/**").permitAll()
                 .requestMatchers("/swagger-ui/**", "/v3/api-docs/**").permitAll()

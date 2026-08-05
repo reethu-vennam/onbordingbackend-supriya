@@ -146,8 +146,10 @@ public class BankStaffController {
         if (agreementText != null)
             merchant.setAgreementLink(agreementText);
 
+        String oldStatus = merchant.getOnboardingStatus();
+        merchant.setOnboardingStatus("agreement_pending");
         merchantProfileRepository.save(merchant);
-        auditLog(merchant.getId(), "SEND_AGREEMENT", merchant.getOnboardingStatus(), merchant.getOnboardingStatus(),
+        auditLog(merchant.getId(), "SEND_AGREEMENT", oldStatus, "agreement_pending",
                 "bank_staff", "Agreement sent to merchant");
 
         log.info("Agreement sent for application {}", applicationId);
@@ -165,9 +167,12 @@ public class BankStaffController {
             return ResponseEntity.ok(ApiResponse.error("NOT_FOUND", "Application not found"));
         }
 
-        String link = body.get("link");
+        String link = body.get("agreement_link");
         merchant.setAgreementLink(link);
+        String oldStatus = merchant.getOnboardingStatus();
+        merchant.setOnboardingStatus("agreement_pending");
         merchantProfileRepository.save(merchant);
+        auditLog(merchant.getId(), "SEND_AGREEMENT_LINK", oldStatus, "agreement_pending", "bank_staff", null);
 
         log.info("Agreement link sent for application {}: {}", applicationId, link);
         return ResponseEntity.ok(ApiResponse.success("Agreement link sent", Map.of(
@@ -228,38 +233,45 @@ public class BankStaffController {
 
     private Map<String, Object> toApplicationMap(MerchantProfileEntity m) {
         Map<String, Object> map = new LinkedHashMap<>();
-        map.put("merchantId", m.getId());
-        map.put("userId", m.getUserId());
-        map.put("fullName", m.getFullName());
-        map.put("businessName", m.getBusinessName() != null ? m.getBusinessName() : "");
+        map.put("id", m.getId());
+        map.put("user_id", m.getUserId());
+        map.put("full_name", m.getFullName());
+        map.put("business_name", m.getBusinessName() != null ? m.getBusinessName() : "");
         map.put("email", m.getEmail());
-        map.put("mobileNumber", m.getMobileNumber());
-        map.put("status", m.getOnboardingStatus());
-        map.put("cpvStatus", m.getCpvStatus());
-        map.put("agreementSigned", m.getAgreementSigned());
-        map.put("bankApplicationId", m.getBankApplicationId());
-        map.put("bankMerchantCode", m.getBankMerchantCode());
-        map.put("createdAt", m.getCreatedAt());
+        map.put("mobile_number", m.getMobileNumber());
+        map.put("onboarding_status", m.getOnboardingStatus());
+        map.put("cpv_status", m.getCpvStatus());
+        map.put("agreement_signed", m.getAgreementSigned());
+        map.put("application_id", m.getApplicationId());
+        map.put("bank_application_id", m.getBankApplicationId());
+        map.put("bank_merchant_code", m.getBankMerchantCode());
+        map.put("has_pg_product", m.getHasPgProduct());
+        map.put("selected_products", m.getSelectedProducts());
+        map.put("bank_commercials", parseJson(m.getBankCommercials()));
+        map.put("pg_agreement_signed", m.getPgAgreementSigned());
+        map.put("pg_agreement_signed_at", m.getPgAgreementSignedAt());
+        map.put("created_at", m.getCreatedAt());
+        map.put("updated_at", m.getUpdatedAt());
         return map;
     }
 
     private Map<String, Object> toApplicationDetailMap(MerchantProfileEntity m) {
         Map<String, Object> map = toApplicationMap(m);
-        map.put("panNumber", m.getPanNumber());
-        map.put("gstNumber", m.getGstNumber());
-        map.put("entityType", m.getEntityType());
-        map.put("bankDecisionNotes", m.getBankDecisionNotes());
-        map.put("decisionAt", m.getDecisionAt());
-        map.put("bankApprovedAt", m.getBankApprovedAt());
-        map.put("agreementLink", m.getAgreementLink());
-        map.put("bankCommercials", m.getBankCommercials());
-        map.put("cpvVideoPath", m.getCpvVideoPath());
-        map.put("cpvSubmittedAt", m.getCpvSubmittedAt());
-        map.put("cpvVerifiedAt", m.getCpvVerifiedAt());
-        map.put("rejectionReason", m.getRejectionReason());
-        map.put("totalMonthlyCost", m.getTotalMonthlyCost());
-        map.put("totalOnetimeCost", m.getTotalOnetimeCost());
-        map.put("selectedProducts", m.getSelectedProducts());
+        map.put("pan_number", m.getPanNumber());
+        map.put("gst_number", m.getGstNumber());
+        map.put("entity_type", m.getEntityType());
+        map.put("aadhaar_number", m.getAadhaarNumber());
+        map.put("bank_decision_notes", m.getBankDecisionNotes());
+        map.put("decision_at", m.getDecisionAt());
+        map.put("bank_approved_at", m.getBankApprovedAt());
+        map.put("agreement_link", m.getAgreementLink());
+        map.put("pg_agreement_signature", m.getPgAgreementSignature());
+        map.put("cpv_video_path", m.getCpvVideoPath());
+        map.put("cpv_submitted_at", m.getCpvSubmittedAt());
+        map.put("cpv_verified_at", m.getCpvVerifiedAt());
+        map.put("rejection_reason", m.getRejectionReason());
+        map.put("total_monthly_cost", m.getTotalMonthlyCost());
+        map.put("total_onetime_cost", m.getTotalOnetimeCost());
 
         try {
             Optional<MerchantBankDetailEntity> optBank = bankDetailRepository.findByMerchantId(m.getId());
@@ -276,6 +288,16 @@ public class BankStaffController {
         }
 
         return map;
+    }
+
+    private Object parseJson(String json) {
+        if (json == null || json.isBlank()) return null;
+        try {
+            return objectMapper.readValue(json, new TypeReference<Map<String, Object>>() {});
+        } catch (Exception e) {
+            log.warn("Failed to parse JSON column: {}", e.getMessage());
+            return null;
+        }
     }
 
     private void auditLog(String merchantId, String action, String oldStatus, String newStatus, String performedBy,

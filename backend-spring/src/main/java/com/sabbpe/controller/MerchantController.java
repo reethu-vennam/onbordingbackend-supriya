@@ -160,6 +160,13 @@ public class MerchantController {
         return ResponseEntity.ok(ApiResponse.success("Split config saved", null));
     }
 
+    @PostMapping("/mandate-status")
+    public ResponseEntity<ApiResponse<Void>> updateMandateStatus(@AuthenticationPrincipal CustomUserDetails user,
+                                                                   @RequestBody MandateStatusRequest request) {
+        merchantService.updateMandateStatus(user.getId(), request);
+        return ResponseEntity.ok(ApiResponse.success("Mandate status updated", null));
+    }
+
     @DeleteMapping("/{merchantId}")
     @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<ApiResponse<Void>> deleteMerchant(@PathVariable String merchantId) {

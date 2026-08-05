@@ -69,7 +69,7 @@ public class MerchantService {
 
     public MerchantProfileResponse getMerchantResponse(String merchantId) {
         MerchantProfileEntity merchant = getMerchantById(merchantId);
-        return buildResponse(merchant);
+        return buildResponse(merchant, true);
     }
 
     public MerchantProfileResponse getMerchantResponseByUserId(String userId) {
@@ -86,12 +86,6 @@ public class MerchantService {
             merchant.setId(UUID.randomUUID().toString());
             merchant.setUserId(userId);
             merchant.setOnboardingStatus("draft");
-        } else {
-            if (!"draft".equals(merchant.getOnboardingStatus())
-                    && !"rejected".equals(merchant.getOnboardingStatus())
-                    && !"submitted".equals(merchant.getOnboardingStatus())) {
-                throw new BadRequestException("Profile can only be edited in draft, rejected, or submitted status");
-            }
         }
 
         updateMerchantFromRequest(merchant, request);
@@ -233,7 +227,7 @@ public class MerchantService {
             log.warn("Failed to send status change email: {}", e.getMessage());
         }
 
-        return buildResponse(merchant);
+        return buildResponse(merchant, true);
     }
 
     @Transactional
@@ -251,7 +245,7 @@ public class MerchantService {
         } else {
             merchants = merchantProfileRepository.findAll();
         }
-        return merchants.stream().map(this::buildResponse).collect(Collectors.toList());
+        return merchants.stream().map(m -> buildResponse(m, true)).collect(Collectors.toList());
     }
 
     public List<MerchantProfileResponse> getMerchantsByDistributor(String distributorId, String statusFilter) {
@@ -261,7 +255,7 @@ public class MerchantService {
         } else {
             merchants = merchantProfileRepository.findByDistributorId(distributorId);
         }
-        return merchants.stream().map(this::buildResponse).collect(Collectors.toList());
+        return merchants.stream().map(m -> buildResponse(m, true)).collect(Collectors.toList());
     }
 
     public IntegrationCostResponse getIntegrationCost(String userId) {
@@ -280,6 +274,24 @@ public class MerchantService {
                 .build();
     }
 
+    /**
+     * Some JDBC drivers (observed with H2's native JSON column type) return a JSON column's
+     * text double-encoded on a real round-trip from the DB (i.e. the stored array comes back
+     * as a JSON string literal containing the array, rather than the array itself). Unwrap one
+     * extra layer of string-encoding before giving up, instead of silently dropping the data.
+     */
+    private List<Map<String, Object>> parseBankAccountsJson(String json) throws JsonProcessingException {
+        if (json == null || json.isBlank() || "null".equals(json)) {
+            return new ArrayList<>();
+        }
+        try {
+            return objectMapper.readValue(json, new TypeReference<List<Map<String, Object>>>() {});
+        } catch (JsonProcessingException e) {
+            String unwrapped = objectMapper.readValue(json, String.class);
+            return objectMapper.readValue(unwrapped, new TypeReference<List<Map<String, Object>>>() {});
+        }
+    }
+
     private void saveBankDetails(String merchantId, List<MerchantProfileRequest.BankDetailRequest> requests) {
         MerchantBankDetailEntity bankDetail = bankDetailRepository.findByMerchantId(merchantId)
                 .orElseGet(() -> {
@@ -292,12 +304,7 @@ public class MerchantService {
 
         List<Map<String, Object>> accounts;
         try {
-            String json = bankDetail.getBankDetailsJson();
-            if (json == null || json.isBlank() || "null".equals(json)) {
-                accounts = new ArrayList<>();
-            } else {
-                accounts = objectMapper.readValue(json, new TypeReference<List<Map<String, Object>>>() {});
-            }
+            accounts = parseBankAccountsJson(bankDetail.getBankDetailsJson());
         } catch (JsonProcessingException e) {
             log.warn("Failed to parse bank_details_json for merchant {}: {}", merchantId, e.getMessage());
             accounts = new ArrayList<>();
@@ -404,6 +411,10 @@ public class MerchantService {
     }
 
     private MerchantProfileResponse buildResponse(MerchantProfileEntity m) {
+        return buildResponse(m, false);
+    }
+
+    private MerchantProfileResponse buildResponse(MerchantProfileEntity m, boolean maskBankAccount) {
         MerchantProfileResponse.MerchantProfileResponseBuilder builder = MerchantProfileResponse.builder()
                 .id(m.getId())
                 .userId(m.getUserId())
@@ -494,24 +505,22 @@ public class MerchantService {
         try {
             Optional<MerchantBankDetailEntity> optBank = bankDetailRepository.findByMerchantId(m.getId());
             if (optBank.isPresent()) {
-                String json = optBank.get().getBankDetailsJson();
-                if (json != null && !json.isBlank()) {
-                    List<Map<String, Object>> rawList = objectMapper.readValue(json,
-                            new TypeReference<List<Map<String, Object>>>() {});
-                    List<MerchantProfileResponse.BankDetailDto> bankDtos = rawList.stream()
-                            .map(item -> MerchantProfileResponse.BankDetailDto.builder()
-                                    .accountNumber(maskString((String) item.getOrDefault("accountNumber", "")))
-                                    .ifscCode((String) item.getOrDefault("ifscCode", ""))
-                                    .bankName((String) item.getOrDefault("bankName", ""))
-                                    .accountHolderName((String) item.getOrDefault("accountHolderName", ""))
-                                    .upiVpa((String) item.getOrDefault("upiVpa", null))
-                                    .build())
-                            .collect(Collectors.toList());
-                    builder.bankDetails(bankDtos);
-                }
+                List<Map<String, Object>> rawList = parseBankAccountsJson(optBank.get().getBankDetailsJson());
+                List<MerchantProfileResponse.BankDetailDto> bankDtos = rawList.stream()
+                        .map(item -> MerchantProfileResponse.BankDetailDto.builder()
+                                .accountNumber(maskBankAccount
+                                        ? maskString((String) item.getOrDefault("accountNumber", ""))
+                                        : (String) item.getOrDefault("accountNumber", ""))
+                                .ifscCode((String) item.getOrDefault("ifscCode", ""))
+                                .bankName((String) item.getOrDefault("bankName", ""))
+                                .accountHolderName((String) item.getOrDefault("accountHolderName", ""))
+                                .upiVpa((String) item.getOrDefault("upiVpa", null))
+                                .build())
+                        .collect(Collectors.toList());
+                builder.bankDetails(bankDtos);
             }
         } catch (Exception e) {
-            log.debug("No bank details for merchant {}", m.getId());
+            log.warn("Failed to read bank details for merchant {}: {}", m.getId(), e.getMessage());
         }
 
         try {
@@ -678,6 +687,15 @@ public class MerchantService {
         if (request.getSplitAccountNumber() != null) merchant.setSplitAccountNumber(request.getSplitAccountNumber());
         if (request.getSplitIfscCode() != null) merchant.setSplitIfscCode(request.getSplitIfscCode());
         merchantProfileRepository.save(merchant);
+    }
+
+    @Transactional
+    public void updateMandateStatus(String userId, MandateStatusRequest request) {
+        MerchantProfileEntity merchant = getMerchantByUserId(userId);
+        merchant.setUpiMandateStatus(request.getUpiMandateStatus());
+        if (request.getUpiMandateRefNo() != null) merchant.setUpiMandateRefNo(request.getUpiMandateRefNo());
+        merchantProfileRepository.save(merchant);
+        auditLog(merchant.getId(), "MANDATE_STATUS_UPDATE", null, request.getUpiMandateStatus(), userId, null);
     }
 
     private void saveKyc(String merchantId, MerchantProfileRequest.KycRequest request) {
