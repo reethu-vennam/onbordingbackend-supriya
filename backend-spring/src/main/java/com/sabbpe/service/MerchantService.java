@@ -261,16 +261,20 @@ public class MerchantService {
     public IntegrationCostResponse getIntegrationCost(String userId) {
         MerchantProfileEntity merchant = getMerchantByUserId(userId);
 
-        BigDecimal integrationCost = productService.calculateIntegrationCost(merchant.getSelectedProducts());
-        BigDecimal monthlyCost = productService.calculateMonthlyCost(merchant.getSelectedProducts());
-        BigDecimal onetimeCost = productService.calculateOnetimeCost(merchant.getSelectedProducts());
+        BigDecimal integrationCost = merchant.getTotalIntegrationCost() != null ? merchant.getTotalIntegrationCost() : BigDecimal.ZERO;
+
+        if (integrationCost.compareTo(BigDecimal.ZERO) <= 0) {
+            BigDecimal monthly = merchant.getTotalMonthlyCost() != null ? merchant.getTotalMonthlyCost() : BigDecimal.ZERO;
+            BigDecimal onetime = merchant.getTotalOnetimeCost() != null ? merchant.getTotalOnetimeCost() : BigDecimal.ZERO;
+            integrationCost = monthly.add(onetime);
+        }
 
         return IntegrationCostResponse.builder()
                 .merchantId(merchant.getId())
                 .userId(merchant.getUserId())
                 .totalIntegrationCost(integrationCost)
-                .totalMonthlyCost(monthlyCost)
-                .totalOnetimeCost(onetimeCost)
+                .totalMonthlyCost(merchant.getTotalMonthlyCost() != null ? merchant.getTotalMonthlyCost() : BigDecimal.ZERO)
+                .totalOnetimeCost(merchant.getTotalOnetimeCost() != null ? merchant.getTotalOnetimeCost() : BigDecimal.ZERO)
                 .build();
     }
 

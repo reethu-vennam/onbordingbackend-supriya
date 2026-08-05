@@ -90,10 +90,20 @@ public class TransactionService {
             throw new ResourceNotFoundException("Merchant", "transactionId", transactionId);
         }
 
+        Object txnDetailsObj = "";
+        if (merchant.getTxnDetails() != null && !merchant.getTxnDetails().isBlank()) {
+            try {
+                txnDetailsObj = objectMapper.readValue(merchant.getTxnDetails(), Object.class);
+            } catch (Exception e) {
+                log.warn("Failed to parse txn_details JSON, returning raw string", e);
+                txnDetailsObj = merchant.getTxnDetails();
+            }
+        }
+
         return Map.of(
                 "merchantId", merchant.getId(),
                 "transactionId", merchant.getTransactionId(),
-                "txnDetails", merchant.getTxnDetails() != null ? merchant.getTxnDetails() : ""
+                "txnDetails", txnDetailsObj
         );
     }
 
