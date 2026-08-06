@@ -110,18 +110,18 @@ public class MerchantService {
     @Transactional
     public MerchantProfileResponse submitProfile(String userId) {
         MerchantProfileEntity merchant = getMerchantByUserId(userId);
-
-        if (!"draft".equals(merchant.getOnboardingStatus())) {
-            throw new BadRequestException("Only draft profiles can be submitted");
-        }
+        String oldStatus = merchant.getOnboardingStatus();
 
         validationService.validateForSubmission(merchant);
 
-        merchant.setOnboardingStatus("submitted");
+        if (!"submitted".equals(oldStatus)) {
+            merchant.setOnboardingStatus("submitted");
+            merchant.setRejectionReason(null);
+        }
         merchant.setSubmittedAt(LocalDateTime.now());
         merchant = merchantProfileRepository.save(merchant);
 
-        auditLog(merchant.getId(), "SUBMIT", "draft", "submitted", userId, null);
+        auditLog(merchant.getId(), "SUBMIT", oldStatus, "submitted", userId, null);
 
         return buildResponse(merchant);
     }
