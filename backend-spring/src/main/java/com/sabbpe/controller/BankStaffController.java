@@ -1,7 +1,6 @@
 package com.sabbpe.controller;
 
 import com.sabbpe.dto.ApiResponse;
-import com.sabbpe.event.MerchantApprovedEvent;
 import com.sabbpe.model.MerchantBankDetailEntity;
 import com.sabbpe.model.MerchantProfileEntity;
 import com.sabbpe.model.OnboardingAuditLogEntity;
@@ -10,7 +9,6 @@ import com.sabbpe.repository.MerchantProfileRepository;
 import com.sabbpe.repository.OnboardingAuditLogRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -30,7 +28,6 @@ public class BankStaffController {
     private final MerchantProfileRepository merchantProfileRepository;
     private final OnboardingAuditLogRepository auditLogRepository;
     private final MerchantBankDetailRepository bankDetailRepository;
-    private final ApplicationEventPublisher eventPublisher;
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     @PostMapping("/auth/login")
@@ -126,10 +123,6 @@ public class BankStaffController {
         merchantProfileRepository.save(merchant);
         auditLog(merchant.getId(), "BANK_DECISION", oldStatus, merchant.getOnboardingStatus(), "bank_staff", notes);
 
-        if ("approved".equals(merchant.getOnboardingStatus())) {
-            eventPublisher.publishEvent(new MerchantApprovedEvent(this, merchant.getId()));
-        }
-
         return ResponseEntity.ok(ApiResponse.success("Decision recorded", Map.of(
                 "applicationId", applicationId,
                 "newStatus", merchant.getOnboardingStatus())));
@@ -223,10 +216,6 @@ public class BankStaffController {
 
         merchantProfileRepository.save(merchant);
         auditLog(merchant.getId(), "FINAL_DECISION", oldStatus, merchant.getOnboardingStatus(), "bank_staff", notes);
-
-        if ("approved".equals(merchant.getOnboardingStatus())) {
-            eventPublisher.publishEvent(new MerchantApprovedEvent(this, merchant.getId()));
-        }
 
         return ResponseEntity.ok(ApiResponse.success("Final decision recorded", Map.of(
                 "applicationId", applicationId,

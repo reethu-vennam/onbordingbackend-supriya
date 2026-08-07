@@ -38,7 +38,8 @@ public class MerchantService {
     private static final Set<String> VALID_STATUSES = Set.of(
             "draft", "submitted", "validating", "pending_bank_approval",
             "approved", "rejected", "validation_failed", "bank_rejected", "verified",
-            "cpv_pending", "cpv_verified", "agreement_pending", "agreement_signed");
+            "cpv_pending", "cpv_verified", "agreement_pending", "agreement_signed"
+    );
 
     private static final Map<String, Set<String>> ALLOWED_TRANSITIONS = Map.ofEntries(
             Map.entry("draft", Set.of("submitted")),
@@ -53,7 +54,8 @@ public class MerchantService {
             Map.entry("bank_rejected", Set.of("pending_bank_approval", "rejected")),
             Map.entry("approved", Set.<String>of()),
             Map.entry("rejected", Set.of("draft")),
-            Map.entry("verified", Set.of("submitted")));
+            Map.entry("verified", Set.of("submitted"))
+    );
 
     public MerchantProfileEntity getMerchantById(String merchantId) {
         return merchantProfileRepository.findById(merchantId)
@@ -126,7 +128,7 @@ public class MerchantService {
 
     @Transactional
     public MerchantProfileResponse updateStatus(String merchantId, String newStatus,
-            String reason, String performedBy) {
+                                                 String reason, String performedBy) {
         MerchantProfileEntity merchant = getMerchantById(merchantId);
         String oldStatus = merchant.getOnboardingStatus();
 
@@ -154,76 +156,68 @@ public class MerchantService {
                 if ("approved".equals(newStatus)) {
                     notificationService.sendEmail(merchant.getEmail(),
                             "Congratulations! Your SabbPe Account Has Been Approved",
-                            String.format(
-                                    """
-                                            <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-                                                <div style="background: #059669; padding: 24px; text-align: center;">
-                                                    <h1 style="color: white; margin: 0;">Account Approved!</h1>
-                                                </div>
-                                                <div style="padding: 24px; background: #f9fafb;">
-                                                    <p>Dear %s,</p>
-                                                    <p>Congratulations! Your merchant account has been <b>approved</b>.</p>
-                                                    <p>You can now start accepting payments through SabbPe.</p>
-                                                    <p>Your account is now active. Log in to your dashboard to get started.</p>
-                                                    <a href="%s/merchant-onboarding?step=dashboard" style="display: inline-block; background: #059669; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; margin-top: 16px;">Go to Dashboard</a>
-                                                </div>
-                                            </div>
-                                            """,
-                                    merchantName, "http://localhost:8877"));
+                            String.format("""
+                                    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+                                        <div style="background: #059669; padding: 24px; text-align: center;">
+                                            <h1 style="color: white; margin: 0;">Account Approved!</h1>
+                                        </div>
+                                        <div style="padding: 24px; background: #f9fafb;">
+                                            <p>Dear %s,</p>
+                                            <p>Congratulations! Your merchant account has been <b>approved</b>.</p>
+                                            <p>You can now start accepting payments through SabbPe.</p>
+                                            <p>Your account is now active. Log in to your dashboard to get started.</p>
+                                            <a href="%s/merchant-onboarding?step=dashboard" style="display: inline-block; background: #059669; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; margin-top: 16px;">Go to Dashboard</a>
+                                        </div>
+                                    </div>
+                                    """, merchantName, "http://localhost:8877"));
                 } else if ("rejected".equals(newStatus) || "bank_rejected".equals(newStatus)) {
                     String reasonText = reason != null ? reason : "Please contact support for details.";
                     notificationService.sendEmail(merchant.getEmail(),
                             "SabbPe Onboarding - Application Update",
-                            String.format(
-                                    """
-                                            <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-                                                <div style="background: #dc2626; padding: 24px; text-align: center;">
-                                                    <h1 style="color: white; margin: 0;">Application Update</h1>
-                                                </div>
-                                                <div style="padding: 24px; background: #f9fafb;">
-                                                    <p>Dear %s,</p>
-                                                    <p>We regret to inform you that your onboarding application has been <b>%s</b>.</p>
-                                                    <p><b>Reason:</b> %s</p>
-                                                    <p>Please contact our support team for assistance or try again.</p>
-                                                    <a href="%s/merchant-onboarding?step=dashboard" style="display: inline-block; background: #2563eb; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; margin-top: 16px;">View Dashboard</a>
-                                                </div>
-                                            </div>
-                                            """,
-                                    merchantName, newStatus, reasonText, "http://localhost:8877"));
+                            String.format("""
+                                    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+                                        <div style="background: #dc2626; padding: 24px; text-align: center;">
+                                            <h1 style="color: white; margin: 0;">Application Update</h1>
+                                        </div>
+                                        <div style="padding: 24px; background: #f9fafb;">
+                                            <p>Dear %s,</p>
+                                            <p>We regret to inform you that your onboarding application has been <b>%s</b>.</p>
+                                            <p><b>Reason:</b> %s</p>
+                                            <p>Please contact our support team for assistance or try again.</p>
+                                            <a href="%s/merchant-onboarding?step=dashboard" style="display: inline-block; background: #2563eb; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; margin-top: 16px;">View Dashboard</a>
+                                        </div>
+                                    </div>
+                                    """, merchantName, newStatus, reasonText, "http://localhost:8877"));
                 } else if ("cpv_pending".equals(newStatus)) {
                     notificationService.sendEmail(merchant.getEmail(),
                             "SabbPe - Shop Verification Required",
-                            String.format(
-                                    """
-                                            <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-                                                <div style="background: #7c3aed; padding: 24px; text-align: center;">
-                                                    <h1 style="color: white; margin: 0;">Shop Verification Required</h1>
-                                                </div>
-                                                <div style="padding: 24px; background: #f9fafb;">
-                                                    <p>Dear %s,</p>
-                                                    <p>Your KYC has been verified. Please record a short video of your business premises (CPV) to proceed.</p>
-                                                    <a href="%s/merchant-onboarding?step=dashboard" style="display: inline-block; background: #7c3aed; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; margin-top: 16px;">Record Shop Video</a>
-                                                </div>
-                                            </div>
-                                            """,
-                                    merchantName, "http://localhost:8877"));
+                            String.format("""
+                                    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+                                        <div style="background: #7c3aed; padding: 24px; text-align: center;">
+                                            <h1 style="color: white; margin: 0;">Shop Verification Required</h1>
+                                        </div>
+                                        <div style="padding: 24px; background: #f9fafb;">
+                                            <p>Dear %s,</p>
+                                            <p>Your KYC has been verified. Please record a short video of your business premises (CPV) to proceed.</p>
+                                            <a href="%s/merchant-onboarding?step=dashboard" style="display: inline-block; background: #7c3aed; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; margin-top: 16px;">Record Shop Video</a>
+                                        </div>
+                                    </div>
+                                    """, merchantName, "http://localhost:8877"));
                 } else if ("agreement_pending".equals(newStatus)) {
                     notificationService.sendEmail(merchant.getEmail(),
                             "SabbPe - Agreement Ready for Signing",
-                            String.format(
-                                    """
-                                            <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-                                                <div style="background: #4f46e5; padding: 24px; text-align: center;">
-                                                    <h1 style="color: white; margin: 0;">Agreement Ready</h1>
-                                                </div>
-                                                <div style="padding: 24px; background: #f9fafb;">
-                                                    <p>Dear %s,</p>
-                                                    <p>The bank has sent your merchant agreement. Please review and sign it to proceed.</p>
-                                                    <a href="%s/merchant-onboarding?step=dashboard" style="display: inline-block; background: #4f46e5; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; margin-top: 16px;">Sign Agreement</a>
-                                                </div>
-                                            </div>
-                                            """,
-                                    merchantName, "http://localhost:8877"));
+                            String.format("""
+                                    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+                                        <div style="background: #4f46e5; padding: 24px; text-align: center;">
+                                            <h1 style="color: white; margin: 0;">Agreement Ready</h1>
+                                        </div>
+                                        <div style="padding: 24px; background: #f9fafb;">
+                                            <p>Dear %s,</p>
+                                            <p>The bank has sent your merchant agreement. Please review and sign it to proceed.</p>
+                                            <a href="%s/merchant-onboarding?step=dashboard" style="display: inline-block; background: #4f46e5; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; margin-top: 16px;">Sign Agreement</a>
+                                        </div>
+                                    </div>
+                                    """, merchantName, "http://localhost:8877"));
                 } else {
                     notificationService.notifyMerchantStatusChange(
                             merchant.getEmail(), merchantName, oldStatus, newStatus);
@@ -267,14 +261,11 @@ public class MerchantService {
     public IntegrationCostResponse getIntegrationCost(String userId) {
         MerchantProfileEntity merchant = getMerchantByUserId(userId);
 
-        BigDecimal integrationCost = merchant.getTotalIntegrationCost() != null ? merchant.getTotalIntegrationCost()
-                : BigDecimal.ZERO;
+        BigDecimal integrationCost = merchant.getTotalIntegrationCost() != null ? merchant.getTotalIntegrationCost() : BigDecimal.ZERO;
 
         if (integrationCost.compareTo(BigDecimal.ZERO) <= 0) {
-            BigDecimal monthly = merchant.getTotalMonthlyCost() != null ? merchant.getTotalMonthlyCost()
-                    : BigDecimal.ZERO;
-            BigDecimal onetime = merchant.getTotalOnetimeCost() != null ? merchant.getTotalOnetimeCost()
-                    : BigDecimal.ZERO;
+            BigDecimal monthly = merchant.getTotalMonthlyCost() != null ? merchant.getTotalMonthlyCost() : BigDecimal.ZERO;
+            BigDecimal onetime = merchant.getTotalOnetimeCost() != null ? merchant.getTotalOnetimeCost() : BigDecimal.ZERO;
             integrationCost = monthly.add(onetime);
         }
 
@@ -282,34 +273,26 @@ public class MerchantService {
                 .merchantId(merchant.getId())
                 .userId(merchant.getUserId())
                 .totalIntegrationCost(integrationCost)
-                .totalMonthlyCost(
-                        merchant.getTotalMonthlyCost() != null ? merchant.getTotalMonthlyCost() : BigDecimal.ZERO)
-                .totalOnetimeCost(
-                        merchant.getTotalOnetimeCost() != null ? merchant.getTotalOnetimeCost() : BigDecimal.ZERO)
+                .totalMonthlyCost(merchant.getTotalMonthlyCost() != null ? merchant.getTotalMonthlyCost() : BigDecimal.ZERO)
+                .totalOnetimeCost(merchant.getTotalOnetimeCost() != null ? merchant.getTotalOnetimeCost() : BigDecimal.ZERO)
                 .build();
     }
 
     /**
-     * Some JDBC drivers (observed with H2's native JSON column type) return a JSON
-     * column's
-     * text double-encoded on a real round-trip from the DB (i.e. the stored array
-     * comes back
-     * as a JSON string literal containing the array, rather than the array itself).
-     * Unwrap one
-     * extra layer of string-encoding before giving up, instead of silently dropping
-     * the data.
+     * Some JDBC drivers (observed with H2's native JSON column type) return a JSON column's
+     * text double-encoded on a real round-trip from the DB (i.e. the stored array comes back
+     * as a JSON string literal containing the array, rather than the array itself). Unwrap one
+     * extra layer of string-encoding before giving up, instead of silently dropping the data.
      */
     private List<Map<String, Object>> parseBankAccountsJson(String json) throws JsonProcessingException {
         if (json == null || json.isBlank() || "null".equals(json)) {
             return new ArrayList<>();
         }
         try {
-            return objectMapper.readValue(json, new TypeReference<List<Map<String, Object>>>() {
-            });
+            return objectMapper.readValue(json, new TypeReference<List<Map<String, Object>>>() {});
         } catch (JsonProcessingException e) {
             String unwrapped = objectMapper.readValue(json, String.class);
-            return objectMapper.readValue(unwrapped, new TypeReference<List<Map<String, Object>>>() {
-            });
+            return objectMapper.readValue(unwrapped, new TypeReference<List<Map<String, Object>>>() {});
         }
     }
 
@@ -394,15 +377,14 @@ public class MerchantService {
             person.setFullName(req.getFullName());
             person.setPanNumber(req.getPanNumber());
             person.setAddressProofType(req.getAddressProofType());
-            person.setIsAuthorizedSignatory(
-                    req.getIsAuthorizedSignatory() != null ? req.getIsAuthorizedSignatory() : false);
+            person.setIsAuthorizedSignatory(req.getIsAuthorizedSignatory() != null ? req.getIsAuthorizedSignatory() : false);
             person.setSequenceOrder(req.getSequenceOrder() != null ? req.getSequenceOrder() : 0);
             personRepository.save(person);
         }
     }
 
     private void auditLog(String merchantId, String action, String oldStatus,
-            String newStatus, String performedBy, String notes) {
+                          String newStatus, String performedBy, String notes) {
         OnboardingAuditLogEntity log = new OnboardingAuditLogEntity();
         log.setId(UUID.randomUUID().toString());
         log.setMerchantId(merchantId);
@@ -415,36 +397,21 @@ public class MerchantService {
     }
 
     private void updateMerchantFromRequest(MerchantProfileEntity m, MerchantProfileRequest r) {
-        if (r.getFullName() != null)
-            m.setFullName(r.getFullName());
-        if (r.getMobileNumber() != null)
-            m.setMobileNumber(r.getMobileNumber());
-        if (r.getEmail() != null)
-            m.setEmail(r.getEmail());
-        if (r.getPanNumber() != null)
-            m.setPanNumber(r.getPanNumber().toUpperCase());
-        if (r.getAadhaarNumber() != null)
-            m.setAadhaarNumber(r.getAadhaarNumber());
-        if (r.getBusinessName() != null)
-            m.setBusinessName(r.getBusinessName());
-        if (r.getGstNumber() != null)
-            m.setGstNumber(r.getGstNumber().toUpperCase());
-        if (r.getEntityType() != null)
-            m.setEntityType(r.getEntityType());
-        if (r.getBusinessAddressLine1() != null)
-            m.setBusinessAddressLine1(r.getBusinessAddressLine1());
-        if (r.getBusinessAddressLine2() != null)
-            m.setBusinessAddressLine2(r.getBusinessAddressLine2());
-        if (r.getBusinessCity() != null)
-            m.setBusinessCity(r.getBusinessCity());
-        if (r.getBusinessState() != null)
-            m.setBusinessState(r.getBusinessState());
-        if (r.getBusinessPostalCode() != null)
-            m.setBusinessPostalCode(r.getBusinessPostalCode());
-        if (r.getBusinessCountry() != null)
-            m.setBusinessCountry(r.getBusinessCountry());
-        if (r.getSelectedProducts() != null)
-            m.setSelectedProducts(r.getSelectedProducts());
+        if (r.getFullName() != null) m.setFullName(r.getFullName());
+        if (r.getMobileNumber() != null) m.setMobileNumber(r.getMobileNumber());
+        if (r.getEmail() != null) m.setEmail(r.getEmail());
+        if (r.getPanNumber() != null) m.setPanNumber(r.getPanNumber().toUpperCase());
+        if (r.getAadhaarNumber() != null) m.setAadhaarNumber(r.getAadhaarNumber());
+        if (r.getBusinessName() != null) m.setBusinessName(r.getBusinessName());
+        if (r.getGstNumber() != null) m.setGstNumber(r.getGstNumber().toUpperCase());
+        if (r.getEntityType() != null) m.setEntityType(r.getEntityType());
+        if (r.getBusinessAddressLine1() != null) m.setBusinessAddressLine1(r.getBusinessAddressLine1());
+        if (r.getBusinessAddressLine2() != null) m.setBusinessAddressLine2(r.getBusinessAddressLine2());
+        if (r.getBusinessCity() != null) m.setBusinessCity(r.getBusinessCity());
+        if (r.getBusinessState() != null) m.setBusinessState(r.getBusinessState());
+        if (r.getBusinessPostalCode() != null) m.setBusinessPostalCode(r.getBusinessPostalCode());
+        if (r.getBusinessCountry() != null) m.setBusinessCountry(r.getBusinessCountry());
+        if (r.getSelectedProducts() != null) m.setSelectedProducts(r.getSelectedProducts());
     }
 
     private MerchantProfileResponse buildResponse(MerchantProfileEntity m) {
@@ -654,8 +621,7 @@ public class MerchantService {
         merchant.setAgreementSigned(true);
         merchant.setAgreementSignedAt(LocalDateTime.now());
         merchant.setAgreementIpAddress(ipAddress);
-        if (request.getSignatureName() != null)
-            merchant.setAgreementSignature(request.getSignatureName());
+        if (request.getSignatureName() != null) merchant.setAgreementSignature(request.getSignatureName());
         String oldStatus = merchant.getOnboardingStatus();
         merchant.setOnboardingStatus("agreement_signed");
         merchantProfileRepository.save(merchant);
@@ -666,20 +632,18 @@ public class MerchantService {
                 String merchantName = merchant.getFullName() != null ? merchant.getFullName() : "Merchant";
                 notificationService.sendEmail(merchant.getEmail(),
                         "SabbPe - Agreement Signed Successfully",
-                        String.format(
-                                """
-                                        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-                                            <div style="background: #059669; padding: 24px; text-align: center;">
-                                                <h1 style="color: white; margin: 0;">Agreement Signed</h1>
-                                            </div>
-                                            <div style="padding: 24px; background: #f9fafb;">
-                                                <p>Dear %s,</p>
-                                                <p>You have successfully signed the Payment Gateway agreement.</p>
-                                                <p>Your application is now with the bank for final approval. You will receive an email once the bank completes its review.</p>
-                                            </div>
-                                        </div>
-                                        """,
-                                merchantName));
+                        String.format("""
+                                <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+                                    <div style="background: #059669; padding: 24px; text-align: center;">
+                                        <h1 style="color: white; margin: 0;">Agreement Signed</h1>
+                                    </div>
+                                    <div style="padding: 24px; background: #f9fafb;">
+                                        <p>Dear %s,</p>
+                                        <p>You have successfully signed the Payment Gateway agreement.</p>
+                                        <p>Your application is now with the bank for final approval. You will receive an email once the bank completes its review.</p>
+                                    </div>
+                                </div>
+                                """, merchantName));
             }
         } catch (Exception e) {
             log.warn("Failed to send agreement signed email: {}", e.getMessage());
@@ -722,14 +686,10 @@ public class MerchantService {
     @Transactional
     public void saveSplitConfig(String userId, SplitConfigRequest request) {
         MerchantProfileEntity merchant = getMerchantByUserId(userId);
-        if (request.getSplitSettlementEnabled() != null)
-            merchant.setSplitSettlementEnabled(request.getSplitSettlementEnabled());
-        if (request.getSplitPercentage() != null)
-            merchant.setSplitPercentage(request.getSplitPercentage());
-        if (request.getSplitAccountNumber() != null)
-            merchant.setSplitAccountNumber(request.getSplitAccountNumber());
-        if (request.getSplitIfscCode() != null)
-            merchant.setSplitIfscCode(request.getSplitIfscCode());
+        if (request.getSplitSettlementEnabled() != null) merchant.setSplitSettlementEnabled(request.getSplitSettlementEnabled());
+        if (request.getSplitPercentage() != null) merchant.setSplitPercentage(request.getSplitPercentage());
+        if (request.getSplitAccountNumber() != null) merchant.setSplitAccountNumber(request.getSplitAccountNumber());
+        if (request.getSplitIfscCode() != null) merchant.setSplitIfscCode(request.getSplitIfscCode());
         merchantProfileRepository.save(merchant);
     }
 
@@ -737,8 +697,7 @@ public class MerchantService {
     public void updateMandateStatus(String userId, MandateStatusRequest request) {
         MerchantProfileEntity merchant = getMerchantByUserId(userId);
         merchant.setUpiMandateStatus(request.getUpiMandateStatus());
-        if (request.getUpiMandateRefNo() != null)
-            merchant.setUpiMandateRefNo(request.getUpiMandateRefNo());
+        if (request.getUpiMandateRefNo() != null) merchant.setUpiMandateRefNo(request.getUpiMandateRefNo());
         merchantProfileRepository.save(merchant);
         auditLog(merchant.getId(), "MANDATE_STATUS_UPDATE", null, request.getUpiMandateStatus(), userId, null);
     }
@@ -750,32 +709,19 @@ public class MerchantService {
             kyc.setId(UUID.randomUUID().toString());
             kyc.setMerchantId(merchantId);
         }
-        if (request.getVideoKycCompleted() != null)
-            kyc.setVideoKycCompleted(request.getVideoKycCompleted());
-        if (request.getIsVideoCompleted() != null)
-            kyc.setVideoKycCompleted(request.getIsVideoCompleted());
-        if (request.getLocationCaptured() != null)
-            kyc.setLocationCaptured(request.getLocationCaptured());
-        if (request.getLocationVerified() != null)
-            kyc.setLocationCaptured(request.getLocationVerified());
-        if (request.getSelfieUrl() != null)
-            kyc.setSelfieFilePath(request.getSelfieUrl());
-        if (request.getLatitude() != null)
-            kyc.setLatitude(BigDecimal.valueOf(request.getLatitude()));
-        if (request.getLongitude() != null)
-            kyc.setLongitude(BigDecimal.valueOf(request.getLongitude()));
-        if (request.getFullAddress() != null)
-            kyc.setFullAddress(request.getFullAddress());
-        if (request.getArea() != null)
-            kyc.setArea(request.getArea());
-        if (request.getCity() != null)
-            kyc.setCity(request.getCity());
-        if (request.getState() != null)
-            kyc.setState(request.getState());
-        if (request.getPincode() != null)
-            kyc.setPincode(request.getPincode());
-        if (request.getCountry() != null)
-            kyc.setCountry(request.getCountry());
+        if (request.getVideoKycCompleted() != null) kyc.setVideoKycCompleted(request.getVideoKycCompleted());
+        if (request.getIsVideoCompleted() != null) kyc.setVideoKycCompleted(request.getIsVideoCompleted());
+        if (request.getLocationCaptured() != null) kyc.setLocationCaptured(request.getLocationCaptured());
+        if (request.getLocationVerified() != null) kyc.setLocationCaptured(request.getLocationVerified());
+        if (request.getSelfieUrl() != null) kyc.setSelfieFilePath(request.getSelfieUrl());
+        if (request.getLatitude() != null) kyc.setLatitude(BigDecimal.valueOf(request.getLatitude()));
+        if (request.getLongitude() != null) kyc.setLongitude(BigDecimal.valueOf(request.getLongitude()));
+        if (request.getFullAddress() != null) kyc.setFullAddress(request.getFullAddress());
+        if (request.getArea() != null) kyc.setArea(request.getArea());
+        if (request.getCity() != null) kyc.setCity(request.getCity());
+        if (request.getState() != null) kyc.setState(request.getState());
+        if (request.getPincode() != null) kyc.setPincode(request.getPincode());
+        if (request.getCountry() != null) kyc.setCountry(request.getCountry());
         kyc.setKycStatus("pending");
         kycRepository.save(kyc);
     }
@@ -797,11 +743,9 @@ public class MerchantService {
     }
 
     private String maskString(String input) {
-        if (input == null)
-            return null;
+        if (input == null) return null;
         int len = input.length();
-        if (len <= 4)
-            return input;
+        if (len <= 4) return input;
         return input.substring(0, len - 4).replaceAll(".", "X") + input.substring(len - 4);
     }
 }

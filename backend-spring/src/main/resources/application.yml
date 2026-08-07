@@ -14,14 +14,9 @@ spring:
       minimum-idle: 5
       idle-timeout: 300000
       connection-timeout: 20000
-
-
-      
   jpa:
     hibernate:
       ddl-auto: none
-      naming:
-        physical-strategy: org.hibernate.boot.model.naming.CamelCaseToUnderscoresNamingStrategy
     show-sql: false
     properties:
       hibernate:
@@ -71,11 +66,6 @@ app:
     password: ${EMAIL_PASSWORD:${EMAIL_PASS:Tjk5hLgsSKt4}}
     secure: ${EMAIL_SECURE:true}
     from: ${EMAIL_FROM:payments@sabbpe.com}
-
-  ecosystem:
-    base-url: ${ECOSYSTEM_BASE_URL:https://ecosystemuat.sabbpe.com/sabbpe/v1/merchant/onboard}
-    api-key: ${ECOSYSTEM_API_KEY:+Zjed3iEyJjACK0fwG2nOUO6x1NQjBOe99d9C1oPpGo=}
-    enabled: ${ECOSYSTEM_ENABLED:true}
 
   settlement:
     dry-run: ${SETTLEMENT_DRY_RUN:false}

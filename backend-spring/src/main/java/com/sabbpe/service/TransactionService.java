@@ -103,13 +103,14 @@ public class TransactionService {
         return Map.of(
                 "merchantId", merchant.getId(),
                 "transactionId", merchant.getTransactionId(),
-                "txnDetails", txnDetailsObj);
+                "txnDetails", txnDetailsObj
+        );
     }
 
     public String extractTransactionIdFromPayload(Object payload) {
         try {
             JsonNode node = objectMapper.valueToTree(payload);
-            String[] keys = { "transaction_id", "master_transaction_id", "txnid", "txn_id" };
+            String[] keys = {"transaction_id", "master_transaction_id", "txnid", "txn_id"};
             for (String key : keys) {
                 if (node.has(key) && !node.get(key).isNull()) {
                     return node.get(key).asText();
@@ -162,14 +163,11 @@ public class TransactionService {
     }
 
     private String resolveMerchantId(String identifier) {
-        if (identifier == null)
-            return null;
+        if (identifier == null) return null;
         Optional<MerchantProfileEntity> byId = merchantProfileRepository.findById(identifier);
-        if (byId.isPresent())
-            return byId.get().getId();
+        if (byId.isPresent()) return byId.get().getId();
         Optional<MerchantProfileEntity> byTxnId = merchantProfileRepository.findByTransactionId(identifier);
-        if (byTxnId.isPresent())
-            return byTxnId.get().getId();
+        if (byTxnId.isPresent()) return byTxnId.get().getId();
         return identifier;
     }
 
@@ -184,8 +182,7 @@ public class TransactionService {
                 .paymentMethod(t.getPaymentMethod())
                 .customerName(t.getCustomerName())
                 .customerEmail(t.getCustomerEmail())
-                // settlementStatus field removed from TransactionResponse builder or named
-                // differently;
+                // settlementStatus field removed from TransactionResponse builder or named differently;
                 // omit mapping here to match TransactionResponse definition
                 .createdAt(t.getCreatedAt())
                 .build();
