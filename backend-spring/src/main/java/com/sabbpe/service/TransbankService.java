@@ -1,6 +1,7 @@
 package com.sabbpe.service;
 
 import com.sabbpe.dto.BankValidationResponse;
+import com.sabbpe.dto.OcrResult;
 import com.fasterxml.jackson.databind.JsonNode;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -8,7 +9,19 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.*;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
+import org.springframework.web.multipart.MultipartFile;
 
+import javax.imageio.IIOImage;
+import javax.imageio.ImageIO;
+import javax.imageio.ImageWriteParam;
+import javax.imageio.ImageWriter;
+import javax.imageio.stream.ImageOutputStream;
+import java.awt.Color;
+import java.awt.Graphics2D;
+import java.awt.RenderingHints;
+import java.awt.image.BufferedImage;
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
@@ -42,6 +55,183 @@ public class TransbankService {
     private static final Set<String> SUCCESS_STATUSES = Set.of(
         "ACCOUNT_VALID", "VALID", "VALIDATED", "SUCCESS", "ACCOUNT_VERIFIED"
     );
+
+    private static final int OCR_MAX_IMAGE_BYTES = 80 * 1024;
+
+    public OcrResult documentOcr(MultipartFile file, String docType) throws Exception {
+        String normalizedDocType = normalizeDocType(docType);
+
+        String token = generateToken();
+        if (token == null) {
+            throw new IllegalStateException("Failed to generate Transbank token");
+        }
+
+        byte[] uploadedBytes = file.getBytes();
+        byte[] jpegBytes = isJpeg(uploadedBytes) ? uploadedBytes : writeJpeg(readImage(uploadedBytes), 0.95f);
+        if (jpegBytes.length > OCR_MAX_IMAGE_BYTES) {
+            jpegBytes = compressJpegToLimit(readImage(jpegBytes), OCR_MAX_IMAGE_BYTES);
+        }
+
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("doc_front_image", Base64.getEncoder().encodeToString(jpegBytes));
+        body.put("doc_type", normalizedDocType);
+
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(MediaType.APPLICATION_JSON);
+        headers.setBearerAuth(token);
+
+        HttpEntity<Map<String, Object>> entity = new HttpEntity<>(body, headers);
+        ResponseEntity<JsonNode> response = restTemplate.postForEntity(baseUrl + "/ocr", entity, JsonNode.class);
+
+        log.info("Transbank OCR - status: {}, jpegSizeBytes: {}", response.getStatusCode(), jpegBytes.length);
+
+        return parseOcrResult(response.getBody(), normalizedDocType);
+    }
+
+    private OcrResult parseOcrResult(JsonNode raw, String docType) {
+        JsonNode result = raw;
+        if (result != null && result.has("result")) {
+            result = result.get("result");
+        }
+        if (result != null && result.has("data")) {
+            result = result.get("data");
+        }
+
+        String panNumber = null;
+        String aadhaarNumber = null;
+        String name = null;
+        String dob = null;
+
+        if ("PAN".equals(docType)) {
+            panNumber = firstText(result, "card_number", "pan_number", "pan", "panNumber");
+            name = firstText(result, "name_on_card", "name", "nameOnCard");
+            dob = firstText(result, "date_of_birth", "dob", "dateOfBirth");
+        } else {
+            aadhaarNumber = firstText(result, "aadhaar_number", "aadhaarNumber", "aadhaar", "uid", "card_number");
+            name = firstText(result, "name_on_card", "name", "nameOnCard");
+            dob = firstText(result, "date_of_birth", "dob", "dateOfBirth");
+        }
+
+        return OcrResult.builder()
+                .panNumber(panNumber)
+                .aadhaarNumber(aadhaarNumber)
+                .extractedName(name)
+                .dateOfBirth(dob)
+                .confidence(90)
+                .rawText(raw != null ? raw.toString() : null)
+                .build();
+    }
+
+    private static String firstText(JsonNode node, String... fields) {
+        if (node == null) return null;
+        for (String field : fields) {
+            if (node.has(field) && !node.get(field).isNull()) {
+                return node.get(field).asText();
+            }
+        }
+        return null;
+    }
+
+    private String normalizeDocType(String docType) {
+        return docType == null ? "" : docType.trim().replace("\"", "").toUpperCase();
+    }
+
+    private boolean isJpeg(byte[] bytes) {
+        return bytes != null
+                && bytes.length >= 3
+                && (bytes[0] & 0xFF) == 0xFF
+                && (bytes[1] & 0xFF) == 0xD8
+                && (bytes[2] & 0xFF) == 0xFF;
+    }
+
+    private BufferedImage readImage(byte[] bytes) throws Exception {
+        BufferedImage source = ImageIO.read(new ByteArrayInputStream(bytes));
+        if (source == null) {
+            throw new IllegalArgumentException("Invalid image file");
+        }
+        return toRgbImage(source);
+    }
+
+    private BufferedImage toRgbImage(BufferedImage source) {
+        BufferedImage rgb = new BufferedImage(source.getWidth(), source.getHeight(), BufferedImage.TYPE_INT_RGB);
+        Graphics2D graphics = rgb.createGraphics();
+        try {
+            graphics.setColor(Color.WHITE);
+            graphics.fillRect(0, 0, rgb.getWidth(), rgb.getHeight());
+            graphics.drawImage(source, 0, 0, null);
+        } finally {
+            graphics.dispose();
+        }
+        return rgb;
+    }
+
+    private byte[] compressJpegToLimit(BufferedImage image, int maxBytes) throws Exception {
+        BufferedImage current = image;
+        byte[] best = null;
+
+        for (int resizeAttempt = 0; resizeAttempt < 12; resizeAttempt++) {
+            for (float quality = 0.90f; quality >= 0.35f; quality -= 0.05f) {
+                byte[] candidate = writeJpeg(current, quality);
+                if (best == null || candidate.length < best.length) {
+                    best = candidate;
+                }
+                if (candidate.length <= maxBytes) {
+                    return candidate;
+                }
+            }
+
+            int nextWidth = Math.max(300, Math.round(current.getWidth() * 0.85f));
+            int nextHeight = Math.max(300, Math.round(current.getHeight() * 0.85f));
+            if (nextWidth == current.getWidth() && nextHeight == current.getHeight()) {
+                break;
+            }
+            current = resizeImage(current, nextWidth, nextHeight);
+        }
+
+        if (best != null && best.length <= maxBytes) {
+            return best;
+        }
+        throw new IllegalArgumentException("Unable to compress image below 80KB");
+    }
+
+    private BufferedImage resizeImage(BufferedImage source, int width, int height) {
+        BufferedImage resized = new BufferedImage(width, height, BufferedImage.TYPE_INT_RGB);
+        Graphics2D graphics = resized.createGraphics();
+        try {
+            graphics.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BILINEAR);
+            graphics.setRenderingHint(RenderingHints.KEY_RENDERING, RenderingHints.VALUE_RENDER_QUALITY);
+            graphics.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+            graphics.setColor(Color.WHITE);
+            graphics.fillRect(0, 0, width, height);
+            graphics.drawImage(source, 0, 0, width, height, null);
+        } finally {
+            graphics.dispose();
+        }
+        return resized;
+    }
+
+    private byte[] writeJpeg(BufferedImage image, float quality) throws Exception {
+        Iterator<ImageWriter> writers = ImageIO.getImageWritersByFormatName("jpeg");
+        if (!writers.hasNext()) {
+            throw new IllegalStateException("JPEG writer is not available");
+        }
+
+        ImageWriter writer = writers.next();
+        try (ByteArrayOutputStream output = new ByteArrayOutputStream();
+             ImageOutputStream imageOutput = ImageIO.createImageOutputStream(output)) {
+            writer.setOutput(imageOutput);
+            ImageWriteParam params = writer.getDefaultWriteParam();
+            if (params.canWriteCompressed()) {
+                params.setCompressionMode(ImageWriteParam.MODE_EXPLICIT);
+                params.setCompressionQuality(Math.max(0.0f, Math.min(1.0f, quality)));
+            }
+            writer.write(null, new IIOImage(image, null, null), params);
+            imageOutput.flush();
+            return output.toByteArray();
+        } finally {
+            writer.dispose();
+        }
+    }
 
     public String generateToken() {
         try {
