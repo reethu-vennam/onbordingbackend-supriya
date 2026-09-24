@@ -14,7 +14,11 @@ public interface MerchantProfileRepository extends JpaRepository<MerchantProfile
 
     Optional<MerchantProfileEntity> findByUserId(String userId);
 
+    Optional<MerchantProfileEntity> findByEcosystemOrganizationId(String ecosystemOrganizationId);
+
     Optional<MerchantProfileEntity> findByEmail(String email);
+
+    Optional<MerchantProfileEntity> findByMobileNumber(String mobileNumber);
 
     Optional<MerchantProfileEntity> findByBusinessName(String businessName);
 

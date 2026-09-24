@@ -31,6 +31,7 @@ public class TransactionService {
     private final TransactionRepository transactionRepository;
     private final MerchantProfileRepository merchantProfileRepository;
     private final ObjectMapper objectMapper;
+    private final SabbpeEcosystemService sabbpeEcosystemService;
 
     @Transactional
     public Map<String, Object> storeTransactionId(String userId, String transactionId) {
@@ -67,7 +68,20 @@ public class TransactionService {
         merchant.setTxnDetails(txnDetailsJson);
         merchantProfileRepository.save(merchant);
         log.info("Stored txn_details for transaction_id {}", transactionId);
+
+        markEcosystemServicesPaidIfSuccessful(merchant, txnDetailsJson);
         return Map.of("outcome", "stored", "merchantId", merchant.getId(), "transactionId", transactionId);
+    }
+
+    private void markEcosystemServicesPaidIfSuccessful(MerchantProfileEntity merchant, String txnDetailsJson) {
+        try {
+            JsonNode payment = objectMapper.readTree(txnDetailsJson);
+            if ("SUCCESS".equalsIgnoreCase(payment.path("status").asText())) {
+                sabbpeEcosystemService.reportIntegrationFeePaid(merchant, payment);
+            }
+        } catch (JsonProcessingException e) {
+            log.warn("Could not parse txn_details for merchant {}; ecosystem payment-status not reported", merchant.getId(), e);
+        }
     }
 
     public String getTransactionId(String userId) {

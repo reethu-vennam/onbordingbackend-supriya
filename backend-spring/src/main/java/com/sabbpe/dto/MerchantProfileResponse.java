@@ -40,6 +40,7 @@ public class MerchantProfileResponse {
     private String businessCountry;
 
     private String selectedProducts;
+    private String scanResults;
     private BigDecimal totalMonthlyCost;
     private BigDecimal totalOnetimeCost;
     private BigDecimal totalIntegrationCost;

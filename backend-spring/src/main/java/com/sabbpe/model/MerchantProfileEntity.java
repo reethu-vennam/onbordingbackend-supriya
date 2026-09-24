@@ -129,8 +129,41 @@ public class MerchantProfileEntity {
     @Column(name = "upi_mandate_ref_no", length = 100)
     private String upiMandateRefNo;
 
+    // The CAMS-assigned reference (cp_mdt_ref_no from the mandatecreate response) — the
+    // status-check endpoint requires THIS, not our own trxnno/upi_mandate_ref_no above
+    // (confirmed 2026-09-23: querying by trxnno always returns NOT_FOUND).
+    @Column(name = "ecosystem_cams_reference", length = 100)
+    private String ecosystemCamsReference;
+
+    // Onboarding Team's ecosystem integration (ecosystemuat.sabbpe.com) — the merchant's
+    // permanent identity there, and the first product subscription created once the
+    // mandate above goes active. See ONBOARDING_TEAM_GUIDE.md / SabbpeEcosystemService.
+    @Column(name = "ecosystem_organization_id", length = 100)
+    private String ecosystemOrganizationId;
+
+    @Column(name = "ecosystem_organization_code", length = 50)
+    private String ecosystemOrganizationCode;
+
+    @Column(name = "ecosystem_onboarded_at")
+    private LocalDateTime ecosystemOnboardedAt;
+
+    @Column(name = "ecosystem_subscription_id", length = 100)
+    private String ecosystemSubscriptionId;
+
+    @Column(name = "ecosystem_subscription_next_due_date", length = 20)
+    private String ecosystemSubscriptionNextDueDate;
+
+    // Day-of-month the mandate is configured to recur on (its executabledays at creation) —
+    // reused as anchor_day for the first subscription so it matches the mandate's actual
+    // schedule, not whatever day the merchant happened to finish authorizing it.
+    @Column(name = "ecosystem_mandate_anchor_day")
+    private Integer ecosystemMandateAnchorDay;
+
     @Column(name = "selected_products", columnDefinition = "JSON")
     private String selectedProducts;
+
+    @Column(name = "scan_results", columnDefinition = "JSON")
+    private String scanResults;
 
     @Column(name = "monthly_rental_cost", precision = 10, scale = 2)
     private BigDecimal monthlyRentalCost = BigDecimal.ZERO;

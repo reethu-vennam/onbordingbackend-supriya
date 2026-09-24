@@ -101,15 +101,68 @@ public class TransbankService {
         String aadhaarNumber = null;
         String name = null;
         String dob = null;
+        String gstNumber = null;
+        String businessName = null;
+        String entityType = null;
+        String stateCode = null;
+        String state = null;
+        String ifscCode = null;
+        String accountNumber = null;
+        String bankName = null;
+        String branchName = null;
+        String accountHolderName = null;
+        String address = null;
+        String addressLine1 = null;
+        String city = null;
+        String pincode = null;
 
-        if ("PAN".equals(docType)) {
-            panNumber = firstText(result, "card_number", "pan_number", "pan", "panNumber");
-            name = firstText(result, "name_on_card", "name", "nameOnCard");
-            dob = firstText(result, "date_of_birth", "dob", "dateOfBirth");
-        } else {
-            aadhaarNumber = firstText(result, "aadhaar_number", "aadhaarNumber", "aadhaar", "uid", "card_number");
-            name = firstText(result, "name_on_card", "name", "nameOnCard");
-            dob = firstText(result, "date_of_birth", "dob", "dateOfBirth");
+        String rawText = raw != null ? raw.toString() : "";
+
+        switch (docType) {
+            case "PAN":
+                panNumber = firstText(result, "card_number", "pan_number", "pan", "panNumber");
+                name = firstText(result, "name_on_card", "name", "nameOnCard");
+                dob = firstText(result, "date_of_birth", "dob", "dateOfBirth");
+                break;
+            case "AADHAAR":
+                aadhaarNumber = firstText(result, "aadhaar_number", "aadhaarNumber", "aadhaar", "uid", "card_number");
+                name = firstText(result, "name_on_card", "name", "nameOnCard");
+                dob = firstText(result, "date_of_birth", "dob", "dateOfBirth");
+                break;
+            case "AADHAAR_BACK":
+                address = firstText(result, "address", "full_address", "completeAddress");
+                addressLine1 = firstText(result, "address_line1", "house_building", "flat_door_block");
+                city = firstText(result, "city", "district", "post_office");
+                state = firstText(result, "state");
+                pincode = firstText(result, "pincode", "pin_code", "postal_code");
+                if (address == null && addressLine1 == null) {
+                    address = extractAddressFromText(rawText);
+                }
+                break;
+            case "GST":
+                gstNumber = firstText(result, "gstin", "gst_number", "gstNumber", "gst");
+                businessName = firstText(result, "business_name", "legal_name", "trade_name", "name");
+                stateCode = firstText(result, "state_code", "stateCode");
+                entityType = firstText(result, "entity_type", "entityType", "constitution");
+                if (gstNumber == null) gstNumber = extractGstFromText(rawText);
+                if (stateCode == null) state = extractStateFromGstText(rawText);
+                else state = STATE_CODE_MAP.get(stateCode);
+                break;
+            case "CHEQUE":
+                ifscCode = firstText(result, "ifsc", "ifsc_code", "ifscCode");
+                accountNumber = firstText(result, "account_number", "accountNumber", "account_no");
+                bankName = firstText(result, "bank_name", "bankName", "bank");
+                branchName = firstText(result, "branch", "branch_name", "branchName");
+                accountHolderName = firstText(result, "account_holder", "accountHolderName", "name", "beneficiary");
+                if (ifscCode == null) ifscCode = extractIfscFromText(rawText);
+                if (accountNumber == null) accountNumber = extractAccountNumberFromText(rawText);
+                break;
+            default:
+                // Fallback: try PAN/Aadhaar detection
+                aadhaarNumber = firstText(result, "aadhaar_number", "aadhaarNumber", "aadhaar", "uid", "card_number");
+                name = firstText(result, "name_on_card", "name", "nameOnCard");
+                dob = firstText(result, "date_of_birth", "dob", "dateOfBirth");
+                break;
         }
 
         return OcrResult.builder()
@@ -117,6 +170,20 @@ public class TransbankService {
                 .aadhaarNumber(aadhaarNumber)
                 .extractedName(name)
                 .dateOfBirth(dob)
+                .gstNumber(gstNumber)
+                .businessName(businessName)
+                .entityType(entityType)
+                .stateCode(stateCode)
+                .state(state)
+                .ifscCode(ifscCode)
+                .accountNumber(accountNumber)
+                .bankName(bankName)
+                .branchName(branchName)
+                .accountHolderName(accountHolderName)
+                .address(address)
+                .addressLine1(addressLine1)
+                .city(city)
+                .pincode(pincode)
                 .confidence(90)
                 .rawText(raw != null ? raw.toString() : null)
                 .build();
@@ -134,6 +201,86 @@ public class TransbankService {
 
     private String normalizeDocType(String docType) {
         return docType == null ? "" : docType.trim().replace("\"", "").toUpperCase();
+    }
+
+    // ─── GST, Cheque, Address extraction helpers ──────────────────────────────
+
+    private static final Map<String, String> STATE_CODE_MAP = Map.ofEntries(
+        Map.entry("01", "Jammu and Kashmir"), Map.entry("02", "Himachal Pradesh"),
+        Map.entry("03", "Punjab"), Map.entry("04", "Chandigarh"),
+        Map.entry("05", "Uttarakhand"), Map.entry("06", "Haryana"),
+        Map.entry("07", "Delhi"), Map.entry("08", "Rajasthan"),
+        Map.entry("09", "Uttar Pradesh"), Map.entry("10", "Bihar"),
+        Map.entry("11", "Sikkim"), Map.entry("12", "Arunachal Pradesh"),
+        Map.entry("13", "Nagaland"), Map.entry("14", "Manipur"),
+        Map.entry("15", "Mizoram"), Map.entry("16", "Tripura"),
+        Map.entry("17", "Meghalaya"), Map.entry("18", "Assam"),
+        Map.entry("19", "West Bengal"), Map.entry("20", "Jharkhand"),
+        Map.entry("21", "Odisha"), Map.entry("22", "Chhattisgarh"),
+        Map.entry("23", "Madhya Pradesh"), Map.entry("24", "Gujarat"),
+        Map.entry("25", "Daman and Diu"), Map.entry("26", "Dadra and Nagar Haveli"),
+        Map.entry("27", "Maharashtra"), Map.entry("28", "Andhra Pradesh (Old)"),
+        Map.entry("29", "Karnataka"), Map.entry("30", "Goa"),
+        Map.entry("31", "Lakshadweep"), Map.entry("32", "Kerala"),
+        Map.entry("33", "Tamil Nadu"), Map.entry("34", "Puducherry"),
+        Map.entry("35", "Andaman and Nicobar Islands"), Map.entry("36", "Telangana"),
+        Map.entry("37", "Andhra Pradesh"), Map.entry("38", "Ladakh")
+    );
+
+    private String extractGstFromText(String text) {
+        if (text == null) return null;
+        java.util.regex.Matcher m = java.util.regex.Pattern
+            .compile("[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][1-9A-Z]Z[0-9A-Z]{1}")
+            .matcher(text);
+        return m.find() ? m.group() : null;
+    }
+
+    private String extractStateFromGstText(String text) {
+        if (text == null) return null;
+        java.util.regex.Matcher m = java.util.regex.Pattern
+            .compile("[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]")
+            .matcher(text);
+        if (m.find()) {
+            String code = m.group().substring(0, 2);
+            return STATE_CODE_MAP.getOrDefault(code, code);
+        }
+        return null;
+    }
+
+    private String extractIfscFromText(String text) {
+        if (text == null) return null;
+        java.util.regex.Matcher m = java.util.regex.Pattern
+            .compile("[A-Z]{4}0[A-Z0-9]{6}")
+            .matcher(text);
+        return m.find() ? m.group() : null;
+    }
+
+    private String extractAccountNumberFromText(String text) {
+        if (text == null) return null;
+        java.util.regex.Matcher m = java.util.regex.Pattern
+            .compile("\\b\\d{9,18}\\b")
+            .matcher(text);
+        return m.find() ? m.group() : null;
+    }
+
+    private String extractAddressFromText(String text) {
+        if (text == null) return null;
+        String[] lines = text.split("\n");
+        StringBuilder address = new StringBuilder();
+        for (String line : lines) {
+            String trimmed = line.trim();
+            if (trimmed.isEmpty()) continue;
+            String upper = trimmed.toUpperCase();
+            if (upper.contains("GOVERNMENT") || upper.contains("UNIQUE")
+                || upper.contains("IDENTIFICATION") || upper.contains("DOB")
+                || upper.contains("MALE") || upper.contains("FEMALE")
+                || upper.contains("VID") || upper.matches(".*\\d{4}[\\s-]?\\d{4}[\\s-]?\\d{4}.*")) {
+                continue;
+            }
+            if (address.length() > 0) address.append(", ");
+            address.append(trimmed);
+        }
+        return address.length() > 0 ? address.toString() : null;
     }
 
     private boolean isJpeg(byte[] bytes) {

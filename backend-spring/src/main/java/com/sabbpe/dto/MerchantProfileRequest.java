@@ -31,6 +31,7 @@ public class MerchantProfileRequest {
     private String businessCountry;
 
     private String selectedProducts;
+    private String scanResults;
     private List<PersonRequest> persons;
     private List<BankDetailRequest> bankDetails;
     private KycRequest kyc;

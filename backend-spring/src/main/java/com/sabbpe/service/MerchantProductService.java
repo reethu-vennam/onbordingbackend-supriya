@@ -1,5 +1,7 @@
 package com.sabbpe.service;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.sabbpe.dto.*;
 import com.sabbpe.exception.BadRequestException;
 import com.sabbpe.exception.ResourceNotFoundException;
@@ -12,7 +14,11 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
@@ -25,6 +31,7 @@ public class MerchantProductService {
     private final MerchantSubProductRepository subProductRepository;
     private final MerchantAgreementRepository agreementRepository;
     private final ProductService productService;
+    private final ObjectMapper objectMapper;
 
     @Transactional
     public MerchantProfileResponse updateProducts(String userId, UpdateProductsRequest request) {
@@ -63,6 +70,101 @@ public class MerchantProductService {
         MerchantProfileEntity merchant = merchantProfileRepository.findByUserId(userId)
                 .orElseThrow(() -> new ResourceNotFoundException("Merchant", "userId", userId));
         return merchant.getSelectedProducts();
+    }
+
+    /**
+     * Looked up by email/mobile rather than userId — used by the Dashboard's internal
+     * cross-service call, which only knows the merchant's contact details (there's no
+     * shared merchant ID between the two systems).
+     */
+    public List<String> getSelectedProductCodesByContact(String email, String mobileNumber) {
+        Optional<MerchantProfileEntity> merchant = findByContact(email, mobileNumber);
+        if (merchant.isEmpty()) {
+            return List.of();
+        }
+
+        return extractProductCodes(merchant.get().getSelectedProducts());
+    }
+
+    /**
+     * Merges newly-added product codes into the merchant's selected_products, keyed by
+     * email/mobile like the read side above. Called only after the merchant's payment for
+     * those products has actually succeeded (see the Dashboard's payment-result flow) —
+     * not when they're merely added to the cart, so this never records something unpaid.
+     */
+    @Transactional
+    public List<String> addProductCodesByContact(String email, String mobileNumber, List<String> newProductCodes) {
+        Optional<MerchantProfileEntity> merchantOpt = findByContact(email, mobileNumber);
+        if (merchantOpt.isEmpty()) {
+            throw new ResourceNotFoundException("Merchant", "email/mobile", email + "/" + mobileNumber);
+        }
+
+        MerchantProfileEntity merchant = merchantOpt.get();
+        List<String> existingCodes = extractProductCodes(merchant.getSelectedProducts());
+
+        try {
+            // Preserve existing entries as-is (they may carry pricing_type/price/etc. that
+            // extractProductCodes doesn't read); only append genuinely new codes.
+            com.fasterxml.jackson.databind.node.ArrayNode array;
+            String existingJson = merchant.getSelectedProducts();
+            if (existingJson != null && !existingJson.isBlank()) {
+                JsonNode existingRoot = objectMapper.readTree(existingJson);
+                array = existingRoot.isArray() ? ((com.fasterxml.jackson.databind.node.ArrayNode) existingRoot).deepCopy() : objectMapper.createArrayNode();
+            } else {
+                array = objectMapper.createArrayNode();
+            }
+
+            Set<String> mergedCodes = new LinkedHashSet<>(existingCodes);
+            for (String code : newProductCodes) {
+                if (mergedCodes.add(code)) {
+                    array.addObject().put("product_code", code);
+                }
+            }
+
+            merchant.setSelectedProducts(objectMapper.writeValueAsString(array));
+            merchantProfileRepository.save(merchant);
+            return new ArrayList<>(mergedCodes);
+        } catch (Exception e) {
+            log.error("Failed to save merged selected_products for merchant {}: {}", merchant.getId(), e.getMessage());
+            throw new RuntimeException("Failed to save selected products", e);
+        }
+    }
+
+    private Optional<MerchantProfileEntity> findByContact(String email, String mobileNumber) {
+        Optional<MerchantProfileEntity> merchant = Optional.empty();
+
+        if (email != null && !email.isBlank()) {
+            merchant = merchantProfileRepository.findByEmail(email.trim().toLowerCase());
+        }
+        if (merchant.isEmpty() && mobileNumber != null && !mobileNumber.isBlank()) {
+            merchant = merchantProfileRepository.findByMobileNumber(mobileNumber.trim());
+        }
+        return merchant;
+    }
+
+    private List<String> extractProductCodes(String selectedProductsJson) {
+        if (selectedProductsJson == null || selectedProductsJson.isBlank()) {
+            return List.of();
+        }
+
+        try {
+            JsonNode root = objectMapper.readTree(selectedProductsJson);
+            if (!root.isArray()) {
+                return List.of();
+            }
+
+            Set<String> codes = new LinkedHashSet<>();
+            for (JsonNode item : root) {
+                JsonNode codeNode = item.has("product_code") ? item.get("product_code") : item.get("productCode");
+                if (codeNode != null && !codeNode.isNull()) {
+                    codes.add(codeNode.asText());
+                }
+            }
+            return new ArrayList<>(codes);
+        } catch (Exception e) {
+            log.warn("Failed to parse selected_products JSON: {}", e.getMessage());
+            return List.of();
+        }
     }
 
     public List<SubProductResponse> getSelectedSubProducts(String userId, String parentProductCode) {

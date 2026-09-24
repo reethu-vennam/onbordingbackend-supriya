@@ -412,6 +412,7 @@ public class MerchantService {
         if (r.getBusinessPostalCode() != null) m.setBusinessPostalCode(r.getBusinessPostalCode());
         if (r.getBusinessCountry() != null) m.setBusinessCountry(r.getBusinessCountry());
         if (r.getSelectedProducts() != null) m.setSelectedProducts(r.getSelectedProducts());
+        if (r.getScanResults() != null) m.setScanResults(r.getScanResults());
     }
 
     private MerchantProfileResponse buildResponse(MerchantProfileEntity m) {
@@ -440,6 +441,7 @@ public class MerchantService {
                 .businessPostalCode(m.getBusinessPostalCode())
                 .businessCountry(m.getBusinessCountry())
                 .selectedProducts(m.getSelectedProducts())
+                .scanResults(m.getScanResults())
                 .totalMonthlyCost(m.getTotalMonthlyCost())
                 .totalOnetimeCost(m.getTotalOnetimeCost())
                 .totalIntegrationCost(m.getTotalIntegrationCost())
