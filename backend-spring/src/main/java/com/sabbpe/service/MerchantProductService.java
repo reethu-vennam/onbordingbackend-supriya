@@ -15,8 +15,11 @@ import org.springframework.transaction.annotation.Transactional;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
@@ -48,19 +51,29 @@ public class MerchantProductService {
         merchant = merchantProfileRepository.save(merchant);
 
         if (request.getSubProducts() != null) {
-            subProductRepository.deleteByMerchantProfileId(merchant.getId());
-            subProductRepository.flush();
-            for (UpdateProductsRequest.SubProductSelection sel : request.getSubProducts()) {
-                if (sel.getSubProductCodes() != null) {
-                    for (String subCode : new LinkedHashSet<>(sel.getSubProductCodes())) {
-                        MerchantSubProductEntity sub = new MerchantSubProductEntity();
-                        sub.setId(UUID.randomUUID().toString());
-                        sub.setMerchantProfileId(merchant.getId());
-                        sub.setParentProductCode(sel.getParentProductCode());
-                        sub.setSubProductCode(subCode);
-                        subProductRepository.save(sub);
+            Map<String, String> subProductsByCode = new LinkedHashMap<>();
+            for (UpdateProductsRequest.SubProductSelection selection : request.getSubProducts()) {
+                if (selection.getSubProductCodes() == null) {
+                    continue;
+                }
+                for (String subCode : selection.getSubProductCodes()) {
+                    String existingParent = subProductsByCode.putIfAbsent(subCode, selection.getParentProductCode());
+                    if (existingParent != null && !Objects.equals(existingParent, selection.getParentProductCode())) {
+                        throw new BadRequestException(
+                                "Sub-product " + subCode + " cannot be selected under multiple parent products");
                     }
                 }
+            }
+
+            subProductRepository.deleteByMerchantProfileId(merchant.getId());
+            subProductRepository.flush();
+            for (Map.Entry<String, String> selection : subProductsByCode.entrySet()) {
+                MerchantSubProductEntity sub = new MerchantSubProductEntity();
+                sub.setId(UUID.randomUUID().toString());
+                sub.setMerchantProfileId(merchant.getId());
+                sub.setParentProductCode(selection.getValue());
+                sub.setSubProductCode(selection.getKey());
+                subProductRepository.save(sub);
             }
         }
 
@@ -74,8 +87,10 @@ public class MerchantProductService {
     }
 
     /**
-     * Looked up by email/mobile rather than userId — used by the Dashboard's internal
-     * cross-service call, which only knows the merchant's contact details (there's no
+     * Looked up by email/mobile rather than userId — used by the Dashboard's
+     * internal
+     * cross-service call, which only knows the merchant's contact details (there's
+     * no
      * shared merchant ID between the two systems).
      */
     public List<String> getSelectedProductCodesByContact(String email, String mobileNumber) {
@@ -88,10 +103,14 @@ public class MerchantProductService {
     }
 
     /**
-     * Merges newly-added product codes into the merchant's selected_products, keyed by
-     * email/mobile like the read side above. Called only after the merchant's payment for
-     * those products has actually succeeded (see the Dashboard's payment-result flow) —
-     * not when they're merely added to the cart, so this never records something unpaid.
+     * Merges newly-added product codes into the merchant's selected_products, keyed
+     * by
+     * email/mobile like the read side above. Called only after the merchant's
+     * payment for
+     * those products has actually succeeded (see the Dashboard's payment-result
+     * flow) —
+     * not when they're merely added to the cart, so this never records something
+     * unpaid.
      */
     @Transactional
     public List<String> addProductCodesByContact(String email, String mobileNumber, List<String> newProductCodes) {
@@ -110,7 +129,9 @@ public class MerchantProductService {
             String existingJson = merchant.getSelectedProducts();
             if (existingJson != null && !existingJson.isBlank()) {
                 JsonNode existingRoot = objectMapper.readTree(existingJson);
-                array = existingRoot.isArray() ? ((com.fasterxml.jackson.databind.node.ArrayNode) existingRoot).deepCopy() : objectMapper.createArrayNode();
+                array = existingRoot.isArray()
+                        ? ((com.fasterxml.jackson.databind.node.ArrayNode) existingRoot).deepCopy()
+                        : objectMapper.createArrayNode();
             } else {
                 array = objectMapper.createArrayNode();
             }
@@ -193,7 +214,8 @@ public class MerchantProductService {
         agreement.setAgreementType(request.getAgreementType() != null ? request.getAgreementType() : "PG_AGREEMENT");
         agreement.setAgreementVersion(request.getAgreementVersion());
         agreement.setSelectedProducts(request.getSelectedProducts() != null
-                ? request.getSelectedProducts() : merchant.getSelectedProducts());
+                ? request.getSelectedProducts()
+                : merchant.getSelectedProducts());
         agreement.setTotalMonthlyCost(merchant.getTotalMonthlyCost());
         agreement.setTotalOnetimeCost(merchant.getTotalOnetimeCost());
         agreement.setTotalIntegrationCost(merchant.getTotalIntegrationCost());
