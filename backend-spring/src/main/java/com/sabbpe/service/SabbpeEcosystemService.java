@@ -10,7 +10,9 @@ import com.sabbpe.exception.BadGatewayException;
 import com.sabbpe.model.MerchantProfileEntity;
 import com.sabbpe.model.ProductCatalogEntity;
 import com.sabbpe.repository.MerchantProfileRepository;
+import com.sabbpe.repository.MerchantSubProductRepository;
 import com.sabbpe.repository.ProductCatalogRepository;
+import com.sabbpe.repository.ProductSubCatalogRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -54,7 +56,9 @@ public class SabbpeEcosystemService {
 
     private final RestTemplate restTemplate;
     private final MerchantProfileRepository merchantProfileRepository;
+    private final MerchantSubProductRepository merchantSubProductRepository;
     private final ProductCatalogRepository productCatalogRepository;
+    private final ProductSubCatalogRepository productSubCatalogRepository;
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     @Value("${app.ecosystem.base-url}")
@@ -94,6 +98,7 @@ public class SabbpeEcosystemService {
     @Transactional
     public MerchantProfileEntity ensureOnboarded(MerchantProfileEntity merchant) {
         if (merchant.getEcosystemOrganizationId() != null) {
+            reportStoredIntegrationFeePayment(merchant);
             return merchant;
         }
 
@@ -125,7 +130,44 @@ public class SabbpeEcosystemService {
         merchant.setEcosystemOrganizationId(organizationId);
         merchant.setEcosystemOrganizationCode(organizationCode);
         merchant.setEcosystemOnboardedAt(LocalDateTime.now());
-        return merchantProfileRepository.save(merchant);
+        MerchantProfileEntity onboardedMerchant = merchantProfileRepository.save(merchant);
+        reportStoredIntegrationFeePayment(onboardedMerchant);
+        return onboardedMerchant;
+    }
+
+    private void reportStoredIntegrationFeePayment(MerchantProfileEntity merchant) {
+        String txnDetails = merchant.getTxnDetails();
+        if (txnDetails == null || txnDetails.isBlank()) {
+            return;
+        }
+        try {
+            JsonNode payment = objectMapper.readTree(txnDetails);
+            if ("SUCCESS".equalsIgnoreCase(payment.path("status").asText())) {
+                reportIntegrationFeePaid(merchant, payment);
+            }
+        } catch (Exception e) {
+            log.warn("Could not parse stored txn_details for merchant {}; ecosystem payment-status not reported",
+                    merchant.getId(), e);
+        }
+    }
+
+    private List<String> selectedPaymentGatewaySubProductNames(MerchantProfileEntity merchant) {
+        Map<String, String> namesByCode = productSubCatalogRepository
+            .findByParentProductCode("PROD_004")
+            .stream()
+            .collect(java.util.stream.Collectors.toMap(
+                catalog -> catalog.getProductCode(),
+                catalog -> catalog.getProductName(),
+                (first, ignored) -> first));
+
+        return merchantSubProductRepository
+                .findByMerchantProfileIdAndParentProductCode(merchant.getId(), "PROD_004")
+                .stream()
+            .map(subProduct -> subProduct.getSubProductCode())
+            .filter(code -> code != null && !code.isBlank())
+            .map(code -> namesByCode.getOrDefault(code, code))
+                .distinct()
+                .toList();
     }
 
     // Product catalog code -> ecosystem service code. Only products that actually
@@ -143,31 +185,41 @@ public class SabbpeEcosystemService {
             "PROD_010", "KYC" // KYC APIs
     );
 
-    private List<String> onboardServices(MerchantProfileEntity merchant) {
+    private List<Object> onboardServices(MerchantProfileEntity merchant) {
         // KYC + NACH_MANDATE are non-negotiable — our own token/mandate-create calls
         // (getToken(..., NACH_MANDATE_SERVICE)) depend on this org having that service
         // active.
         // Removing it breaks mandate creation for this merchant entirely.
         Set<String> services = new LinkedHashSet<>();
+        Set<String> paymentGatewayProducts = new LinkedHashSet<>();
         services.add("KYC");
         services.add(NACH_MANDATE_SERVICE);
         for (String productCode : selectedProductCodes(merchant)) {
             String serviceCode = PRODUCT_TO_SERVICE.get(productCode);
             if (serviceCode != null) {
                 services.add(serviceCode);
+                if ("PAYMENT_GATEWAY".equals(serviceCode)) {
+                    paymentGatewayProducts.add(productCatalogRepository.findByProductCode(productCode)
+                            .map(ProductCatalogEntity::getProductName)
+                            .orElse(productCode));
+                }
             }
-            // Also include the merchant's actual product name itself, per explicit request
-            // 2026-09-23 — even though the ecosystem's guide says "service codes only,
-            // never
-            // provider names", so this may not generate real credentials for the product
-            // name
-            // entries the way it does for the 5 recognized service codes above.
-            String productName = productCatalogRepository.findByProductCode(productCode)
-                    .map(ProductCatalogEntity::getProductName)
-                    .orElse(productCode);
-            services.add(productName);
         }
-        return new ArrayList<>(services);
+
+        List<String> paymentGatewaySubProducts = selectedPaymentGatewaySubProductNames(merchant);
+        List<Object> serviceEntries = new ArrayList<>();
+        for (String serviceCode : services) {
+            if ("PAYMENT_GATEWAY".equals(serviceCode) && !paymentGatewaySubProducts.isEmpty()) {
+                Map<String, Object> paymentGateway = new LinkedHashMap<>();
+                paymentGateway.put("code", serviceCode);
+                paymentGateway.put("sub_products", paymentGatewaySubProducts);
+                serviceEntries.add(paymentGateway);
+            } else {
+                serviceEntries.add(serviceCode);
+            }
+        }
+        serviceEntries.addAll(paymentGatewayProducts);
+        return serviceEntries;
     }
 
     // ── Step 2: token (fetched fresh per call; valid 15 min, cheap enough not to
@@ -231,7 +283,11 @@ public class SabbpeEcosystemService {
         // CAMS.
         body.put("merchant_organization_id", merchant.getEcosystemOrganizationId());
         body.put("trxnno", trxnno);
-        body.put("amount", request.getAmount());
+        String amount = request.getAmount();
+        if (amount == null || amount.isBlank() || new BigDecimal(amount).signum() <= 0) {
+            amount = "2.00";
+        }
+        body.put("amount", amount);
         body.put("pattern", "ASPRESENTED");
         body.put("mandatestartdate", start.format(API_DATE));
         body.put("mandateenddate", end.format(API_DATE));
@@ -462,10 +518,7 @@ public class SabbpeEcosystemService {
             log.warn("Merchant {} has no ecosystem_organization_id; payment-status not reported", merchant.getId());
             return;
         }
-        // The payment goes under the product entries onboarding created in
-        // providers.services
-        // (e.g. "UPI QR + Soundbox"), not under the service codes like PAYMENT_GATEWAY.
-        Set<String> services = integrationFeeProductNames(merchant);
+        Set<String> services = integrationFeeServiceCodes(merchant);
         if (services.isEmpty()) {
             log.warn("Merchant {} has no integration-priced products selected; payment-status not reported",
                     merchant.getId());
@@ -520,17 +573,14 @@ public class SabbpeEcosystemService {
     }
 
     /**
-     * Catalog names of the selected products that make up the integration fee
-     * (pricing_type "integration", same rule as
-     * ProductService.calculateIntegrationCost).
-     * Uses the catalog name so it matches the key onboardServices() created in
-     * providers.services.
+    * Parent service codes for selected products that make up the integration fee
+    * (pricing_type "integration", same rule as ProductService.calculateIntegrationCost).
      */
-    private Set<String> integrationFeeProductNames(MerchantProfileEntity merchant) {
+    private Set<String> integrationFeeServiceCodes(MerchantProfileEntity merchant) {
         String json = merchant.getSelectedProducts();
         if (json == null || json.isBlank())
             return Set.of();
-        Set<String> names = new LinkedHashSet<>();
+        Set<String> services = new LinkedHashSet<>();
         try {
             JsonNode root = objectMapper.readTree(json);
             if (!root.isArray())
@@ -541,14 +591,15 @@ public class SabbpeEcosystemService {
                 String productCode = firstNonBlank(textOf(item, "product_code"), textOf(item, "productCode"));
                 if (productCode == null)
                     continue;
-                names.add(productCatalogRepository.findByProductCode(productCode)
-                        .map(ProductCatalogEntity::getProductName)
-                        .orElse(productCode));
+                String serviceCode = PRODUCT_TO_SERVICE.get(productCode);
+                if (serviceCode != null) {
+                    services.add(serviceCode);
+                }
             }
         } catch (Exception e) {
             log.warn("Failed to parse selected_products for merchant {}: {}", merchant.getId(), e.getMessage());
         }
-        return names;
+        return services;
     }
 
     private String firstSelectedProductCode(MerchantProfileEntity merchant) {

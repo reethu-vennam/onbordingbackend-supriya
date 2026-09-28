@@ -26,28 +26,26 @@ public class SecurityConfig {
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
         http
-            .csrf(csrf -> csrf.disable())
-            .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
-            .authorizeHttpRequests(auth -> auth
-                .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
-                .requestMatchers("/uploads/**").permitAll()
-                .requestMatchers("/api/auth/**").permitAll()
-                .requestMatchers("/api/v1/token/generate").permitAll()
-                .requestMatchers("/api/bank-account-validation").permitAll()
-                .requestMatchers("/health").permitAll()
-                .requestMatchers("/api/webhooks/**").permitAll()
-                .requestMatchers("/api/mandates/**").permitAll()
-                .requestMatchers("/api/internal/**").permitAll()
-                .requestMatchers("/api/payment/**").permitAll()
-                .requestMatchers("/api/supabase/**").permitAll()
-                .requestMatchers("/api/demo/**").permitAll()
-                .requestMatchers("/api/bank/**").permitAll()
-                .requestMatchers("/api/support/auth/**").permitAll()
-                .requestMatchers("/api/debug/**").permitAll()
-                .requestMatchers("/swagger-ui/**", "/v3/api-docs/**").permitAll()
-                .anyRequest().authenticated()
-            )
-            .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
+                .csrf(csrf -> csrf.disable())
+                .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+                .authorizeHttpRequests(auth -> auth
+                        .requestMatchers("/uploads/**").permitAll()
+                        .requestMatchers("/api/auth/**").permitAll()
+                        .requestMatchers("/api/v1/token/generate").permitAll()
+                        .requestMatchers("/api/bank-account-validation").permitAll()
+                        .requestMatchers("/health").permitAll()
+                        .requestMatchers("/api/webhooks/**").permitAll()
+                        .requestMatchers("/api/mandates/**").permitAll()
+                        .requestMatchers("/api/internal/**").permitAll()
+                        .requestMatchers("/api/payment/**").permitAll()
+                        .requestMatchers("/api/supabase/**").permitAll()
+                        .requestMatchers("/api/demo/**").permitAll()
+                        .requestMatchers("/api/bank/**").permitAll()
+                        .requestMatchers("/api/support/auth/**").permitAll()
+                        .requestMatchers("/api/debug/**").permitAll()
+                        .requestMatchers("/swagger-ui/**", "/v3/api-docs/**").permitAll()
+                        .anyRequest().authenticated())
+                .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
 
         return http.build();
     }

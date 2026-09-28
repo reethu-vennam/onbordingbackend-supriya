@@ -13,7 +13,7 @@ public class EcosystemMandateCreateRequest {
     private String payerName;
 
     @NotBlank
-    private String amount;
+    private String amount = "2.00";
 
     /** yyyy-MM-dd */
     @NotBlank

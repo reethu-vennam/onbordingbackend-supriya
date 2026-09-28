@@ -49,9 +49,10 @@ public class MerchantProductService {
 
         if (request.getSubProducts() != null) {
             subProductRepository.deleteByMerchantProfileId(merchant.getId());
+            subProductRepository.flush();
             for (UpdateProductsRequest.SubProductSelection sel : request.getSubProducts()) {
                 if (sel.getSubProductCodes() != null) {
-                    for (String subCode : sel.getSubProductCodes()) {
+                    for (String subCode : new LinkedHashSet<>(sel.getSubProductCodes())) {
                         MerchantSubProductEntity sub = new MerchantSubProductEntity();
                         sub.setId(UUID.randomUUID().toString());
                         sub.setMerchantProfileId(merchant.getId());
