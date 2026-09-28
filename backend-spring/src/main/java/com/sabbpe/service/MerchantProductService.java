@@ -68,12 +68,12 @@ public class MerchantProductService {
             subProductRepository.deleteByMerchantProfileId(merchant.getId());
             subProductRepository.flush();
             for (Map.Entry<String, String> selection : subProductsByCode.entrySet()) {
-                MerchantSubProductEntity sub = new MerchantSubProductEntity();
-                sub.setId(UUID.randomUUID().toString());
-                sub.setMerchantProfileId(merchant.getId());
-                sub.setParentProductCode(selection.getValue());
-                sub.setSubProductCode(selection.getKey());
-                subProductRepository.save(sub);
+                subProductRepository.upsertSubProduct(
+                        UUID.randomUUID().toString(),
+                        merchant.getId(),
+                        selection.getValue(),
+                        selection.getKey(),
+                        LocalDateTime.now());
             }
         }
 
