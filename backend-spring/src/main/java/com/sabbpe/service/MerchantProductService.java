@@ -38,7 +38,7 @@ public class MerchantProductService {
 
     @Transactional
     public MerchantProfileResponse updateProducts(String userId, UpdateProductsRequest request) {
-        MerchantProfileEntity merchant = merchantProfileRepository.findByUserId(userId)
+        MerchantProfileEntity merchant = merchantProfileRepository.findByUserIdForUpdate(userId)
                 .orElseThrow(() -> new ResourceNotFoundException("Merchant", "userId", userId));
 
         if (request.getSelectedProducts() != null) {
