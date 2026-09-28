@@ -21,4 +21,5 @@ public class AuthResponse {
     private String fullName;
     private List<String> roles;
     private String merchantId;
+
 }
